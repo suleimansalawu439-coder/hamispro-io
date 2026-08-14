@@ -1,297 +1,328 @@
-// server/_core/app.ts
-import "dotenv/config";
-import express2 from "express";
-import { createExpressMiddleware } from "@trpc/server/adapters/express";
-
-// shared/const.ts
-var COOKIE_NAME = "app_session_id";
-var ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
-var AXIOS_TIMEOUT_MS = 3e4;
-var UNAUTHED_ERR_MSG = "Please login (10001)";
-var NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
-var OAUTH_STATE_COOKIE = "__Host-oauth_state";
-var decodeOAuthState = (state) => {
-  let decoded;
-  try {
-    decoded = atob(state);
-  } catch {
-    return { redirectUri: "" };
-  }
-  try {
-    const parsed = JSON.parse(decoded);
-    if (parsed && typeof parsed.redirectUri === "string") return parsed;
-  } catch {
-  }
-  return { redirectUri: decoded };
+var __defProp = Object.defineProperty;
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __esm = (fn, res) => function __init() {
+  return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
+};
+var __export = (target, all) => {
+  for (var name in all)
+    __defProp(target, name, { get: all[name], enumerable: true });
 };
 
-// server/_core/oauth.ts
-import { parse as parseCookieHeader2 } from "cookie";
-
-// server/db.ts
-import { and, desc, eq, gte, isNotNull, isNull, like, or, sql } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+// shared/const.ts
+var const_exports = {};
+__export(const_exports, {
+  AXIOS_TIMEOUT_MS: () => AXIOS_TIMEOUT_MS,
+  COOKIE_NAME: () => COOKIE_NAME,
+  NOT_ADMIN_ERR_MSG: () => NOT_ADMIN_ERR_MSG,
+  OAUTH_STATE_COOKIE: () => OAUTH_STATE_COOKIE,
+  ONE_YEAR_MS: () => ONE_YEAR_MS,
+  UNAUTHED_ERR_MSG: () => UNAUTHED_ERR_MSG,
+  decodeOAuthState: () => decodeOAuthState,
+  encodeOAuthState: () => encodeOAuthState
+});
+var COOKIE_NAME, ONE_YEAR_MS, AXIOS_TIMEOUT_MS, UNAUTHED_ERR_MSG, NOT_ADMIN_ERR_MSG, OAUTH_STATE_COOKIE, encodeOAuthState, decodeOAuthState;
+var init_const = __esm({
+  "shared/const.ts"() {
+    "use strict";
+    COOKIE_NAME = "app_session_id";
+    ONE_YEAR_MS = 1e3 * 60 * 60 * 24 * 365;
+    AXIOS_TIMEOUT_MS = 3e4;
+    UNAUTHED_ERR_MSG = "Please login (10001)";
+    NOT_ADMIN_ERR_MSG = "You do not have required permission (10002)";
+    OAUTH_STATE_COOKIE = "__Host-oauth_state";
+    encodeOAuthState = (state) => btoa(JSON.stringify(state));
+    decodeOAuthState = (state) => {
+      let decoded;
+      try {
+        decoded = atob(state);
+      } catch {
+        return { redirectUri: "" };
+      }
+      try {
+        const parsed = JSON.parse(decoded);
+        if (parsed && typeof parsed.redirectUri === "string") return parsed;
+      } catch {
+      }
+      return { redirectUri: decoded };
+    };
+  }
+});
 
 // drizzle/schema.ts
 import { bigint, integer, pgEnum, pgTable, text, timestamp, varchar, boolean, index, serial } from "drizzle-orm/pg-core";
-var roleEnum = pgEnum("role", ["user", "admin"]);
-var categoryEnum = pgEnum("category", ["hacks", "prompts", "freebies", "tutorials", "news"]);
-var resourceTypeEnum = pgEnum("resourceType", ["tool", "model", "template", "offer"]);
-var frequencyEnum = pgEnum("frequency", ["weekly", "daily"]);
-var sourceTypeEnum = pgEnum("sourceType", ["rss", "atom", "release", "api"]);
-var itemTypeEnum = pgEnum("itemType", ["news", "tutorial", "hack", "cheat", "freebie", "tool", "release"]);
-var statusEnum = pgEnum("status", ["new", "processing", "ready", "rejected", "published"]);
-var verificationStatusEnum = pgEnum("verificationStatus", ["unverified", "verified", "needs_review"]);
-var runStatusEnum = pgEnum("run_status", ["running", "completed", "failed"]);
-var adTypeEnum = pgEnum("adType", ["adsense", "sponsor", "banner"]);
-var freebieHealthStatusEnum = pgEnum("freebieHealthStatus", ["active", "expired", "degraded", "unchecked"]);
-var newsletterEditionStatusEnum = pgEnum("newsletterEditionStatus", ["draft", "review", "approved", "sent"]);
-var severityEnum = pgEnum("severity", ["info", "warning", "critical"]);
-var users = pgTable("users", {
-  id: serial("id").primaryKey(),
-  openId: varchar("openId", { length: 64 }).notNull().unique(),
-  name: text("name"),
-  email: varchar("email", { length: 320 }),
-  loginMethod: varchar("loginMethod", { length: 64 }),
-  role: roleEnum("role").default("user").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull(),
-  lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull()
-});
-var articles = pgTable("articles", {
-  id: serial("id").primaryKey(),
-  slug: varchar("slug", { length: 180 }).notNull().unique(),
-  title: varchar("title", { length: 240 }).notNull(),
-  excerpt: text("excerpt").notNull(),
-  content: text("content").notNull(),
-  category: categoryEnum("category").notNull(),
-  seriesKey: varchar("seriesKey", { length: 80 }),
-  authorName: varchar("authorName", { length: 120 }).default("Hamispro Editorial").notNull(),
-  coverImageUrl: text("coverImageUrl"),
-  coverImageKey: varchar("coverImageKey", { length: 500 }),
-  tags: text("tags"),
-  seoTitle: varchar("seoTitle", { length: 240 }),
-  seoDescription: text("seoDescription"),
-  readingTimeMinutes: integer("readingTimeMinutes").default(5).notNull(),
-  featured: boolean("featured").default(false).notNull(),
-  published: boolean("published").default(false).notNull(),
-  publishedAt: timestamp("publishedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-}, (table) => ({
-  categoryIdx: index("articles_category_idx").on(table.category),
-  publishedIdx: index("articles_published_idx").on(table.published, table.publishedAt)
-}));
-var resources = pgTable("resources", {
-  id: serial("id").primaryKey(),
-  slug: varchar("slug", { length: 180 }).notNull().unique(),
-  name: varchar("name", { length: 180 }).notNull(),
-  description: text("description").notNull(),
-  resourceType: resourceTypeEnum("resourceType").notNull(),
-  url: text("url").notNull(),
-  priceLabel: varchar("priceLabel", { length: 100 }).default("Free").notNull(),
-  tags: text("tags"),
-  featured: boolean("featured").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-}, (table) => ({
-  resourceTypeIdx: index("resources_type_idx").on(table.resourceType)
-}));
-var newsletterSubscribers = pgTable("newsletter_subscribers", {
-  id: serial("id").primaryKey(),
-  email: varchar("email", { length: 320 }).notNull().unique(),
-  leadMagnet: varchar("leadMagnet", { length: 180 }).default("Ultimate Prompt Cheatsheet").notNull(),
-  source: varchar("source", { length: 120 }).default("homepage").notNull(),
-  confirmed: boolean("confirmed").default(false).notNull(),
-  topics: varchar("topics", { length: 500 }).default("hacks,prompts,freebies,tutorials,news").notNull(),
-  frequency: frequencyEnum("frequency").default("weekly").notNull(),
-  timezone: varchar("timezone", { length: 80 }).default("UTC").notNull(),
-  preferenceToken: varchar("preferenceToken", { length: 64 }).unique(),
-  unsubscribedAt: timestamp("unsubscribedAt"),
-  lastDigestSentAt: timestamp("lastDigestSentAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull()
-});
-var adminRateLimitBuckets = pgTable("admin_rate_limit_buckets", {
-  key: varchar("key", { length: 191 }).primaryKey(),
-  windowStartedAt: bigint("windowStartedAt", { mode: "number" }).notNull(),
-  count: integer("count").notNull().default(0),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-});
-var adminAuditLogs = pgTable("admin_audit_logs", {
-  id: serial("id").primaryKey(),
-  actorOpenId: varchar("actorOpenId", { length: 64 }).notNull(),
-  actorUserId: integer("actorUserId").notNull(),
-  action: varchar("action", { length: 80 }).notNull(),
-  resourceType: varchar("resourceType", { length: 80 }).notNull(),
-  resourceId: integer("resourceId"),
-  metadata: text("metadata"),
-  ipAddress: varchar("ipAddress", { length: 64 }),
-  userAgent: varchar("userAgent", { length: 500 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull()
-}, (table) => ({
-  actorCreatedIdx: index("admin_audit_actor_created_idx").on(table.actorOpenId, table.createdAt),
-  actionCreatedIdx: index("admin_audit_action_created_idx").on(table.action, table.createdAt)
-}));
-var editorialSources = pgTable("editorial_sources", {
-  id: serial("id").primaryKey(),
-  name: varchar("name", { length: 160 }).notNull(),
-  sourceType: sourceTypeEnum("sourceType").notNull(),
-  feedUrl: varchar("feedUrl", { length: 500 }).notNull().unique(),
-  sourceUrl: varchar("sourceUrl", { length: 500 }).notNull(),
-  domain: varchar("domain", { length: 180 }).notNull(),
-  defaultCategory: categoryEnum("defaultCategory").default("news").notNull(),
-  reliabilityScore: integer("reliabilityScore").default(80).notNull(),
-  enabled: boolean("enabled").default(true).notNull(),
-  lastFetchedAt: timestamp("lastFetchedAt"),
-  lastError: text("lastError"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-}, (table) => ({
-  enabledIdx: index("editorial_sources_enabled_idx").on(table.enabled)
-}));
-var editorialItems = pgTable("editorial_items", {
-  id: serial("id").primaryKey(),
-  sourceId: integer("sourceId").notNull(),
-  externalId: varchar("externalId", { length: 500 }).notNull(),
-  canonicalUrl: text("canonicalUrl").notNull(),
-  dedupeHash: varchar("dedupeHash", { length: 64 }).notNull().unique(),
-  title: varchar("title", { length: 500 }).notNull(),
-  excerpt: text("excerpt").notNull(),
-  author: varchar("author", { length: 240 }),
-  sourceName: varchar("sourceName", { length: 160 }).notNull(),
-  itemType: itemTypeEnum("itemType").default("news").notNull(),
-  category: categoryEnum("category").default("news").notNull(),
-  publishedAt: timestamp("publishedAt"),
-  discoveredAt: timestamp("discoveredAt").defaultNow().notNull(),
-  status: statusEnum("status").default("new").notNull(),
-  importanceScore: integer("importanceScore").default(0).notNull(),
-  usefulnessScore: integer("usefulnessScore").default(0).notNull(),
-  noveltyScore: integer("noveltyScore").default(0).notNull(),
-  confidenceScore: integer("confidenceScore").default(0).notNull(),
-  freshnessScore: integer("freshnessScore").default(0).notNull(),
-  verificationStatus: verificationStatusEnum("verificationStatus").default("unverified").notNull(),
-  clusterKey: varchar("clusterKey", { length: 120 }),
-  claimWarnings: text("claimWarnings"),
-  aiSummary: text("aiSummary"),
-  keyTakeaways: text("keyTakeaways"),
-  suggestedAngle: text("suggestedAngle"),
-  suggestedTitle: varchar("suggestedTitle", { length: 240 }),
-  suggestedTags: varchar("suggestedTags", { length: 500 }),
-  modelUsed: varchar("modelUsed", { length: 120 }),
-  rawPayload: text("rawPayload"),
-  reviewerNotes: text("reviewerNotes"),
-  linkedArticleId: integer("linkedArticleId"),
-  reviewedAt: timestamp("reviewedAt"),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-}, (table) => ({
-  queueIdx: index("editorial_items_queue_idx").on(table.status, table.importanceScore, table.discoveredAt),
-  sourcePublishedIdx: index("editorial_items_source_published_idx").on(table.sourceId, table.publishedAt)
-}));
-var ingestionRuns = pgTable("ingestion_runs", {
-  id: serial("id").primaryKey(),
-  runType: varchar("runType", { length: 80 }).notNull(),
-  status: runStatusEnum("status").notNull(),
-  sourceCount: integer("sourceCount").default(0).notNull(),
-  fetchedCount: integer("fetchedCount").default(0).notNull(),
-  insertedCount: integer("insertedCount").default(0).notNull(),
-  enrichedCount: integer("enrichedCount").default(0).notNull(),
-  errorMessage: text("errorMessage"),
-  startedAt: timestamp("startedAt").defaultNow().notNull(),
-  finishedAt: timestamp("finishedAt")
-});
-var mediaAssets = pgTable("media_assets", {
-  id: serial("id").primaryKey(),
-  key: varchar("key", { length: 500 }).notNull().unique(),
-  url: text("url").notNull(),
-  fileName: varchar("fileName", { length: 255 }).notNull(),
-  mimeType: varchar("mimeType", { length: 120 }).notNull(),
-  sizeBytes: integer("sizeBytes").notNull(),
-  uploadedBy: integer("uploadedBy").notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull()
-});
-var analyticsEvents = pgTable("analytics_events", {
-  id: serial("id").primaryKey(),
-  eventType: varchar("eventType", { length: 64 }).notNull(),
-  // pageview, ad_view, ad_click, search, newsletter_signup, article_read
-  path: varchar("path", { length: 255 }).notNull(),
-  sessionId: varchar("sessionId", { length: 64 }).notNull(),
-  userId: integer("userId"),
-  referrer: varchar("referrer", { length: 500 }),
-  browser: varchar("browser", { length: 120 }),
-  device: varchar("device", { length: 80 }),
-  ipAddress: varchar("ipAddress", { length: 64 }),
-  metadata: text("metadata"),
-  createdAt: timestamp("createdAt").defaultNow().notNull()
-}, (table) => ({
-  eventCreatedIdx: index("analytics_event_created_idx").on(table.eventType, table.createdAt),
-  pathIdx: index("analytics_path_idx").on(table.path)
-}));
-var adPlacements = pgTable("ad_placements", {
-  id: serial("id").primaryKey(),
-  slotKey: varchar("slotKey", { length: 120 }).notNull().unique(),
-  name: varchar("name", { length: 160 }).notNull(),
-  adType: adTypeEnum("adType").default("adsense").notNull(),
-  adsenseClient: varchar("adsenseClient", { length: 120 }),
-  adsenseSlot: varchar("adsenseSlot", { length: 120 }),
-  customHtml: text("customHtml"),
-  enabled: boolean("enabled").default(true).notNull(),
-  impressions: integer("impressions").default(0).notNull(),
-  clicks: integer("clicks").default(0).notNull(),
-  estimatedRevenueCents: integer("estimatedRevenueCents").default(0).notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-});
-var systemSettings = pgTable("system_settings", {
-  key: varchar("key", { length: 120 }).primaryKey(),
-  value: text("value").notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-});
-var freebieHealth = pgTable("freebie_health", {
-  id: serial("id").primaryKey(),
-  resourceId: integer("resourceId").notNull().unique(),
-  status: freebieHealthStatusEnum("status").default("unchecked").notNull(),
-  lastCheckedAt: timestamp("lastCheckedAt"),
-  statusCode: integer("statusCode"),
-  responseTimeMs: integer("responseTimeMs"),
-  errorSummary: text("errorSummary"),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-});
-var newsletterEditions = pgTable("newsletter_editions", {
-  id: serial("id").primaryKey(),
-  editionNumber: integer("editionNumber").notNull().unique(),
-  title: varchar("title", { length: 240 }).notNull(),
-  subject: varchar("subject", { length: 240 }).notNull(),
-  contentHtml: text("contentHtml").notNull(),
-  status: newsletterEditionStatusEnum("status").default("draft").notNull(),
-  scheduledFor: timestamp("scheduledFor"),
-  sentAt: timestamp("sentAt"),
-  recipientCount: integer("recipientCount").default(0).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
-});
-var operationalIncidents = pgTable("operational_incidents", {
-  id: serial("id").primaryKey(),
-  component: varchar("component", { length: 120 }).notNull(),
-  severity: severityEnum("severity").default("warning").notNull(),
-  summary: varchar("summary", { length: 255 }).notNull(),
-  details: text("details"),
-  resolved: boolean("resolved").default(false).notNull(),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
-  resolvedAt: timestamp("resolvedAt")
+var roleEnum, categoryEnum, resourceTypeEnum, frequencyEnum, sourceTypeEnum, itemTypeEnum, statusEnum, verificationStatusEnum, runStatusEnum, adTypeEnum, freebieHealthStatusEnum, newsletterEditionStatusEnum, severityEnum, users, articles, resources, newsletterSubscribers, adminRateLimitBuckets, adminAuditLogs, editorialSources, editorialItems, ingestionRuns, mediaAssets, analyticsEvents, adPlacements, systemSettings, freebieHealth, newsletterEditions, operationalIncidents;
+var init_schema = __esm({
+  "drizzle/schema.ts"() {
+    "use strict";
+    roleEnum = pgEnum("role", ["user", "admin"]);
+    categoryEnum = pgEnum("category", ["hacks", "prompts", "freebies", "tutorials", "news"]);
+    resourceTypeEnum = pgEnum("resourceType", ["tool", "model", "template", "offer"]);
+    frequencyEnum = pgEnum("frequency", ["weekly", "daily"]);
+    sourceTypeEnum = pgEnum("sourceType", ["rss", "atom", "release", "api"]);
+    itemTypeEnum = pgEnum("itemType", ["news", "tutorial", "hack", "cheat", "freebie", "tool", "release"]);
+    statusEnum = pgEnum("status", ["new", "processing", "ready", "rejected", "published"]);
+    verificationStatusEnum = pgEnum("verificationStatus", ["unverified", "verified", "needs_review"]);
+    runStatusEnum = pgEnum("run_status", ["running", "completed", "failed"]);
+    adTypeEnum = pgEnum("adType", ["adsense", "sponsor", "banner"]);
+    freebieHealthStatusEnum = pgEnum("freebieHealthStatus", ["active", "expired", "degraded", "unchecked"]);
+    newsletterEditionStatusEnum = pgEnum("newsletterEditionStatus", ["draft", "review", "approved", "sent"]);
+    severityEnum = pgEnum("severity", ["info", "warning", "critical"]);
+    users = pgTable("users", {
+      id: serial("id").primaryKey(),
+      openId: varchar("openId", { length: 64 }).notNull().unique(),
+      name: text("name"),
+      email: varchar("email", { length: 320 }),
+      loginMethod: varchar("loginMethod", { length: 64 }),
+      role: roleEnum("role").default("user").notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull(),
+      lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull()
+    });
+    articles = pgTable("articles", {
+      id: serial("id").primaryKey(),
+      slug: varchar("slug", { length: 180 }).notNull().unique(),
+      title: varchar("title", { length: 240 }).notNull(),
+      excerpt: text("excerpt").notNull(),
+      content: text("content").notNull(),
+      category: categoryEnum("category").notNull(),
+      seriesKey: varchar("seriesKey", { length: 80 }),
+      authorName: varchar("authorName", { length: 120 }).default("Hamispro Editorial").notNull(),
+      coverImageUrl: text("coverImageUrl"),
+      coverImageKey: varchar("coverImageKey", { length: 500 }),
+      tags: text("tags"),
+      seoTitle: varchar("seoTitle", { length: 240 }),
+      seoDescription: text("seoDescription"),
+      readingTimeMinutes: integer("readingTimeMinutes").default(5).notNull(),
+      featured: boolean("featured").default(false).notNull(),
+      published: boolean("published").default(false).notNull(),
+      publishedAt: timestamp("publishedAt"),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    }, (table) => ({
+      categoryIdx: index("articles_category_idx").on(table.category),
+      publishedIdx: index("articles_published_idx").on(table.published, table.publishedAt)
+    }));
+    resources = pgTable("resources", {
+      id: serial("id").primaryKey(),
+      slug: varchar("slug", { length: 180 }).notNull().unique(),
+      name: varchar("name", { length: 180 }).notNull(),
+      description: text("description").notNull(),
+      resourceType: resourceTypeEnum("resourceType").notNull(),
+      url: text("url").notNull(),
+      priceLabel: varchar("priceLabel", { length: 100 }).default("Free").notNull(),
+      tags: text("tags"),
+      featured: boolean("featured").default(false).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    }, (table) => ({
+      resourceTypeIdx: index("resources_type_idx").on(table.resourceType)
+    }));
+    newsletterSubscribers = pgTable("newsletter_subscribers", {
+      id: serial("id").primaryKey(),
+      email: varchar("email", { length: 320 }).notNull().unique(),
+      leadMagnet: varchar("leadMagnet", { length: 180 }).default("Ultimate Prompt Cheatsheet").notNull(),
+      source: varchar("source", { length: 120 }).default("homepage").notNull(),
+      confirmed: boolean("confirmed").default(false).notNull(),
+      topics: varchar("topics", { length: 500 }).default("hacks,prompts,freebies,tutorials,news").notNull(),
+      frequency: frequencyEnum("frequency").default("weekly").notNull(),
+      timezone: varchar("timezone", { length: 80 }).default("UTC").notNull(),
+      preferenceToken: varchar("preferenceToken", { length: 64 }).unique(),
+      unsubscribedAt: timestamp("unsubscribedAt"),
+      lastDigestSentAt: timestamp("lastDigestSentAt"),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    });
+    adminRateLimitBuckets = pgTable("admin_rate_limit_buckets", {
+      key: varchar("key", { length: 191 }).primaryKey(),
+      windowStartedAt: bigint("windowStartedAt", { mode: "number" }).notNull(),
+      count: integer("count").notNull().default(0),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    });
+    adminAuditLogs = pgTable("admin_audit_logs", {
+      id: serial("id").primaryKey(),
+      actorOpenId: varchar("actorOpenId", { length: 64 }).notNull(),
+      actorUserId: integer("actorUserId").notNull(),
+      action: varchar("action", { length: 80 }).notNull(),
+      resourceType: varchar("resourceType", { length: 80 }).notNull(),
+      resourceId: integer("resourceId"),
+      metadata: text("metadata"),
+      ipAddress: varchar("ipAddress", { length: 64 }),
+      userAgent: varchar("userAgent", { length: 500 }),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    }, (table) => ({
+      actorCreatedIdx: index("admin_audit_actor_created_idx").on(table.actorOpenId, table.createdAt),
+      actionCreatedIdx: index("admin_audit_action_created_idx").on(table.action, table.createdAt)
+    }));
+    editorialSources = pgTable("editorial_sources", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 160 }).notNull(),
+      sourceType: sourceTypeEnum("sourceType").notNull(),
+      feedUrl: varchar("feedUrl", { length: 500 }).notNull().unique(),
+      sourceUrl: varchar("sourceUrl", { length: 500 }).notNull(),
+      domain: varchar("domain", { length: 180 }).notNull(),
+      defaultCategory: categoryEnum("defaultCategory").default("news").notNull(),
+      reliabilityScore: integer("reliabilityScore").default(80).notNull(),
+      enabled: boolean("enabled").default(true).notNull(),
+      lastFetchedAt: timestamp("lastFetchedAt"),
+      lastError: text("lastError"),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    }, (table) => ({
+      enabledIdx: index("editorial_sources_enabled_idx").on(table.enabled)
+    }));
+    editorialItems = pgTable("editorial_items", {
+      id: serial("id").primaryKey(),
+      sourceId: integer("sourceId").notNull(),
+      externalId: varchar("externalId", { length: 500 }).notNull(),
+      canonicalUrl: text("canonicalUrl").notNull(),
+      dedupeHash: varchar("dedupeHash", { length: 64 }).notNull().unique(),
+      title: varchar("title", { length: 500 }).notNull(),
+      excerpt: text("excerpt").notNull(),
+      author: varchar("author", { length: 240 }),
+      sourceName: varchar("sourceName", { length: 160 }).notNull(),
+      itemType: itemTypeEnum("itemType").default("news").notNull(),
+      category: categoryEnum("category").default("news").notNull(),
+      publishedAt: timestamp("publishedAt"),
+      discoveredAt: timestamp("discoveredAt").defaultNow().notNull(),
+      status: statusEnum("status").default("new").notNull(),
+      importanceScore: integer("importanceScore").default(0).notNull(),
+      usefulnessScore: integer("usefulnessScore").default(0).notNull(),
+      noveltyScore: integer("noveltyScore").default(0).notNull(),
+      confidenceScore: integer("confidenceScore").default(0).notNull(),
+      freshnessScore: integer("freshnessScore").default(0).notNull(),
+      verificationStatus: verificationStatusEnum("verificationStatus").default("unverified").notNull(),
+      clusterKey: varchar("clusterKey", { length: 120 }),
+      claimWarnings: text("claimWarnings"),
+      aiSummary: text("aiSummary"),
+      keyTakeaways: text("keyTakeaways"),
+      suggestedAngle: text("suggestedAngle"),
+      suggestedTitle: varchar("suggestedTitle", { length: 240 }),
+      suggestedTags: varchar("suggestedTags", { length: 500 }),
+      modelUsed: varchar("modelUsed", { length: 120 }),
+      rawPayload: text("rawPayload"),
+      reviewerNotes: text("reviewerNotes"),
+      linkedArticleId: integer("linkedArticleId"),
+      reviewedAt: timestamp("reviewedAt"),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    }, (table) => ({
+      queueIdx: index("editorial_items_queue_idx").on(table.status, table.importanceScore, table.discoveredAt),
+      sourcePublishedIdx: index("editorial_items_source_published_idx").on(table.sourceId, table.publishedAt)
+    }));
+    ingestionRuns = pgTable("ingestion_runs", {
+      id: serial("id").primaryKey(),
+      runType: varchar("runType", { length: 80 }).notNull(),
+      status: runStatusEnum("status").notNull(),
+      sourceCount: integer("sourceCount").default(0).notNull(),
+      fetchedCount: integer("fetchedCount").default(0).notNull(),
+      insertedCount: integer("insertedCount").default(0).notNull(),
+      enrichedCount: integer("enrichedCount").default(0).notNull(),
+      errorMessage: text("errorMessage"),
+      startedAt: timestamp("startedAt").defaultNow().notNull(),
+      finishedAt: timestamp("finishedAt")
+    });
+    mediaAssets = pgTable("media_assets", {
+      id: serial("id").primaryKey(),
+      key: varchar("key", { length: 500 }).notNull().unique(),
+      url: text("url").notNull(),
+      fileName: varchar("fileName", { length: 255 }).notNull(),
+      mimeType: varchar("mimeType", { length: 120 }).notNull(),
+      sizeBytes: integer("sizeBytes").notNull(),
+      uploadedBy: integer("uploadedBy").notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    });
+    analyticsEvents = pgTable("analytics_events", {
+      id: serial("id").primaryKey(),
+      eventType: varchar("eventType", { length: 64 }).notNull(),
+      // pageview, ad_view, ad_click, search, newsletter_signup, article_read
+      path: varchar("path", { length: 255 }).notNull(),
+      sessionId: varchar("sessionId", { length: 64 }).notNull(),
+      userId: integer("userId"),
+      referrer: varchar("referrer", { length: 500 }),
+      browser: varchar("browser", { length: 120 }),
+      device: varchar("device", { length: 80 }),
+      ipAddress: varchar("ipAddress", { length: 64 }),
+      metadata: text("metadata"),
+      createdAt: timestamp("createdAt").defaultNow().notNull()
+    }, (table) => ({
+      eventCreatedIdx: index("analytics_event_created_idx").on(table.eventType, table.createdAt),
+      pathIdx: index("analytics_path_idx").on(table.path)
+    }));
+    adPlacements = pgTable("ad_placements", {
+      id: serial("id").primaryKey(),
+      slotKey: varchar("slotKey", { length: 120 }).notNull().unique(),
+      name: varchar("name", { length: 160 }).notNull(),
+      adType: adTypeEnum("adType").default("adsense").notNull(),
+      adsenseClient: varchar("adsenseClient", { length: 120 }),
+      adsenseSlot: varchar("adsenseSlot", { length: 120 }),
+      customHtml: text("customHtml"),
+      enabled: boolean("enabled").default(true).notNull(),
+      impressions: integer("impressions").default(0).notNull(),
+      clicks: integer("clicks").default(0).notNull(),
+      estimatedRevenueCents: integer("estimatedRevenueCents").default(0).notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    });
+    systemSettings = pgTable("system_settings", {
+      key: varchar("key", { length: 120 }).primaryKey(),
+      value: text("value").notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    });
+    freebieHealth = pgTable("freebie_health", {
+      id: serial("id").primaryKey(),
+      resourceId: integer("resourceId").notNull().unique(),
+      status: freebieHealthStatusEnum("status").default("unchecked").notNull(),
+      lastCheckedAt: timestamp("lastCheckedAt"),
+      statusCode: integer("statusCode"),
+      responseTimeMs: integer("responseTimeMs"),
+      errorSummary: text("errorSummary"),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    });
+    newsletterEditions = pgTable("newsletter_editions", {
+      id: serial("id").primaryKey(),
+      editionNumber: integer("editionNumber").notNull().unique(),
+      title: varchar("title", { length: 240 }).notNull(),
+      subject: varchar("subject", { length: 240 }).notNull(),
+      contentHtml: text("contentHtml").notNull(),
+      status: newsletterEditionStatusEnum("status").default("draft").notNull(),
+      scheduledFor: timestamp("scheduledFor"),
+      sentAt: timestamp("sentAt"),
+      recipientCount: integer("recipientCount").default(0).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      updatedAt: timestamp("updatedAt").defaultNow().$onUpdateFn(() => /* @__PURE__ */ new Date()).notNull()
+    });
+    operationalIncidents = pgTable("operational_incidents", {
+      id: serial("id").primaryKey(),
+      component: varchar("component", { length: 120 }).notNull(),
+      severity: severityEnum("severity").default("warning").notNull(),
+      summary: varchar("summary", { length: 255 }).notNull(),
+      details: text("details"),
+      resolved: boolean("resolved").default(false).notNull(),
+      createdAt: timestamp("createdAt").defaultNow().notNull(),
+      resolvedAt: timestamp("resolvedAt")
+    });
+  }
 });
 
 // server/_core/env.ts
-var ENV = {
-  appId: process.env.VITE_APP_ID ?? "",
-  cookieSecret: process.env.JWT_SECRET ?? "",
-  databaseUrl: process.env.DATABASE_URL ?? "",
-  oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
-  ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
-  isProduction: process.env.NODE_ENV === "production",
-  forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
-  forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
-};
+var env_exports = {};
+__export(env_exports, {
+  ENV: () => ENV
+});
+var ENV;
+var init_env = __esm({
+  "server/_core/env.ts"() {
+    "use strict";
+    ENV = {
+      appId: process.env.VITE_APP_ID ?? "",
+      cookieSecret: process.env.JWT_SECRET ?? "",
+      databaseUrl: process.env.DATABASE_URL ?? "",
+      oAuthServerUrl: process.env.OAUTH_SERVER_URL ?? "",
+      ownerOpenId: process.env.OWNER_OPEN_ID ?? "",
+      isProduction: process.env.NODE_ENV === "production",
+      forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
+      forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? ""
+    };
+  }
+});
 
 // server/adminOperationsMetrics.ts
 function aggregateAdEventMetrics(events) {
@@ -317,6 +348,11 @@ function attachAdEventMetrics(placements, counters) {
     reportedRevenueCents: placement.estimatedRevenueCents
   }));
 }
+var init_adminOperationsMetrics = __esm({
+  "server/adminOperationsMetrics.ts"() {
+    "use strict";
+  }
+});
 
 // server/analyticsExtensions.ts
 function getDateRangeThreshold(days) {
@@ -345,10 +381,61 @@ function generateAnalyticsCsv(metrics) {
   ];
   return rows.map((row) => row.map(csvCell).join(",")).join("\n");
 }
+var init_analyticsExtensions = __esm({
+  "server/analyticsExtensions.ts"() {
+    "use strict";
+  }
+});
 
 // server/db.ts
+var db_exports = {};
+__export(db_exports, {
+  DEFAULT_SYSTEM_SETTINGS: () => DEFAULT_SYSTEM_SETTINGS,
+  consumeAdminRateLimit: () => consumeAdminRateLimit,
+  createArticle: () => createArticle,
+  createIngestionRun: () => createIngestionRun,
+  finishIngestionRun: () => finishIngestionRun,
+  getArticleBySlug: () => getArticleBySlug,
+  getDashboardMetrics: () => getDashboardMetrics,
+  getDashboardMetricsFromDb: () => getDashboardMetricsFromDb,
+  getDb: () => getDb,
+  getDigestPreferencesByToken: () => getDigestPreferencesByToken,
+  getEditorialItemById: () => getEditorialItemById,
+  getLaunchReadiness: () => getLaunchReadiness,
+  getUserByOpenId: () => getUserByOpenId,
+  insertAdminAuditLog: () => insertAdminAuditLog,
+  listAdPlacements: () => listAdPlacements,
+  listAdminAuditLogs: () => listAdminAuditLogs,
+  listAllArticles: () => listAllArticles,
+  listDigestCandidates: () => listDigestCandidates,
+  listDueDigestSubscribers: () => listDueDigestSubscribers,
+  listEditorialQueue: () => listEditorialQueue,
+  listEditorialSources: () => listEditorialSources,
+  listIngestionRuns: () => listIngestionRuns,
+  listPublicArticles: () => listPublicArticles,
+  listResources: () => listResources,
+  listSystemSettings: () => listSystemSettings,
+  listSystemSettingsFromDb: () => listSystemSettingsFromDb,
+  markDigestSent: () => markDigestSent,
+  markEditorialSourceFetched: () => markEditorialSourceFetched,
+  mergeSystemSettings: () => mergeSystemSettings,
+  seriesLabels: () => seriesLabels,
+  setSystemSetting: () => setSystemSetting,
+  setSystemSettingWithDb: () => setSystemSettingWithDb,
+  subscribeEmail: () => subscribeEmail,
+  trackAnalyticsEvent: () => trackAnalyticsEvent,
+  updateAdPlacement: () => updateAdPlacement,
+  updateArticle: () => updateArticle,
+  updateDigestPreferencesByToken: () => updateDigestPreferencesByToken,
+  updateEditorialItem: () => updateEditorialItem,
+  upsertEditorialItem: () => upsertEditorialItem,
+  upsertEditorialSource: () => upsertEditorialSource,
+  upsertUser: () => upsertUser
+});
+import { and, desc, eq, gte, isNotNull, isNull, like, or, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { nanoid } from "nanoid";
-var _db = null;
 async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -418,119 +505,6 @@ async function getUserByOpenId(openId) {
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result[0];
 }
-var seedArticles = [
-  {
-    id: 1,
-    slug: "the-quiet-ai-workflow-that-saves-hours-every-week",
-    title: "The quiet AI workflow that saves hours every week",
-    excerpt: "A practical system for turning messy research into clear, reusable work with less tab-hopping and more signal.",
-    content: "## The three-pass workflow\n\nMost AI workflows fail because the prompt is asked to do too much at once. Use three short passes instead.\n\n### 1. Collect\n\nPaste the raw material into a capture prompt and ask for claims, unknowns, and source links.\n\n### 2. Shape\n\nTurn the capture into a structured brief.\n\n### 3. Ship\n\nAsk for a final output using the brief as the only source of truth.\n\nPrompt template:\n\nYou are an editorial researcher. Extract claims, open questions, and links from the material below. Return JSON with keys: claims, questions, sources.",
-    category: "hacks",
-    seriesKey: "workflow-autopsy",
-    authorName: "Hamispro Editorial",
-    coverImageUrl: null,
-    coverImageKey: null,
-    tags: "workflow,prompts,productivity",
-    seoTitle: null,
-    seoDescription: null,
-    readingTimeMinutes: 7,
-    featured: true,
-    published: true,
-    publishedAt: /* @__PURE__ */ new Date("2026-08-08T09:00:00Z"),
-    createdAt: /* @__PURE__ */ new Date("2026-08-08T09:00:00Z"),
-    updatedAt: /* @__PURE__ */ new Date("2026-08-08T09:00:00Z")
-  },
-  {
-    id: 2,
-    slug: "the-prompt-debugging-checklist",
-    title: "The prompt-debugging checklist",
-    excerpt: "When an AI answer feels almost right, diagnose the prompt instead of rewriting it from scratch.",
-    content: ["## Prompt quality is observable", "", "Use this checklist before adding more words: context, constraints, examples, format, and evaluation.", "", "### A compact diagnostic", "", "const prompt = { context: 'Who is this for?', task: 'What should happen?', constraints: ['length', 'tone', 'sources'], format: 'What should the answer look like?' };", "", "The fastest improvement usually comes from specifying the output shape."].join("\n"),
-    category: "prompts",
-    seriesKey: "prompt-clinic",
-    authorName: "Hamispro Labs",
-    coverImageUrl: null,
-    coverImageKey: null,
-    tags: "prompting,debugging,templates",
-    seoTitle: null,
-    seoDescription: null,
-    readingTimeMinutes: 5,
-    featured: false,
-    published: true,
-    publishedAt: /* @__PURE__ */ new Date("2026-08-06T09:00:00Z"),
-    createdAt: /* @__PURE__ */ new Date("2026-08-06T09:00:00Z"),
-    updatedAt: /* @__PURE__ */ new Date("2026-08-06T09:00:00Z")
-  },
-  {
-    id: 3,
-    slug: "seven-free-ai-tools-worth-bookmarking",
-    title: "Seven free AI tools worth bookmarking",
-    excerpt: "A tested starter set for research, writing, design, coding, and automation without a paid seat.",
-    content: "## A small vault beats a crowded toolbox\n\nThese tools are useful because each one has a clear job. Start with one workflow and add only what removes a real bottleneck.",
-    category: "freebies",
-    seriesKey: "free-tool-friday",
-    authorName: "Hamispro Editorial",
-    coverImageUrl: null,
-    coverImageKey: null,
-    tags: "freebies,tools,resources",
-    seoTitle: null,
-    seoDescription: null,
-    readingTimeMinutes: 6,
-    featured: false,
-    published: true,
-    publishedAt: /* @__PURE__ */ new Date("2026-08-04T09:00:00Z"),
-    createdAt: /* @__PURE__ */ new Date("2026-08-04T09:00:00Z"),
-    updatedAt: /* @__PURE__ */ new Date("2026-08-04T09:00:00Z")
-  },
-  {
-    id: 4,
-    slug: "build-a-personal-ai-research-desk",
-    title: "Build a personal AI research desk",
-    excerpt: "A tutorial for turning your browser, notes, and favorite model into a calmer research environment.",
-    content: "## Start with the information loop\n\nYour research desk needs capture, retrieval, synthesis, and publishing. This guide maps each stage to a simple tool and a repeatable prompt.",
-    category: "tutorials",
-    seriesKey: null,
-    authorName: "Hamispro Labs",
-    coverImageUrl: null,
-    coverImageKey: null,
-    tags: "tutorial,automation,research",
-    seoTitle: null,
-    seoDescription: null,
-    readingTimeMinutes: 11,
-    featured: false,
-    published: true,
-    publishedAt: /* @__PURE__ */ new Date("2026-08-01T09:00:00Z"),
-    createdAt: /* @__PURE__ */ new Date("2026-08-01T09:00:00Z"),
-    updatedAt: /* @__PURE__ */ new Date("2026-08-01T09:00:00Z")
-  },
-  {
-    id: 5,
-    slug: "why-small-models-are-having-a-big-week",
-    title: "Why small models are having a big week",
-    excerpt: "What efficient models mean for local workflows, private data, and the next generation of AI products.",
-    content: "## Efficiency is becoming a product feature\n\nSmaller models are making AI more portable, cheaper to run, and easier to adapt to a focused job.",
-    category: "news",
-    seriesKey: "five-minute-ai-brief",
-    authorName: "Hamispro Newsroom",
-    coverImageUrl: null,
-    coverImageKey: null,
-    tags: "news,models,industry",
-    seoTitle: null,
-    seoDescription: null,
-    readingTimeMinutes: 4,
-    featured: false,
-    published: true,
-    publishedAt: /* @__PURE__ */ new Date("2026-07-30T09:00:00Z"),
-    createdAt: /* @__PURE__ */ new Date("2026-07-30T09:00:00Z"),
-    updatedAt: /* @__PURE__ */ new Date("2026-07-30T09:00:00Z")
-  }
-];
-var seedResources = [
-  { id: 1, slug: "hugging-face", name: "Hugging Face", description: "Open model hub, datasets, demos, and spaces for experimenting with modern AI.", resourceType: "model", url: "https://huggingface.co", priceLabel: "Free tier", tags: "models,open-source", featured: true, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() },
-  { id: 2, slug: "ollama", name: "Ollama", description: "Run a growing library of open models locally with a simple developer workflow.", resourceType: "tool", url: "https://ollama.com", priceLabel: "Free", tags: "local,developer", featured: true, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() },
-  { id: 3, slug: "prompt-library-starter", name: "Prompt Library Starter", description: "A clean, reusable prompt-library structure for teams and solo creators.", resourceType: "template", url: "#", priceLabel: "Free download", tags: "prompts,templates", featured: true, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() },
-  { id: 4, slug: "google-ai-studio", name: "Google AI Studio", description: "A generous playground for prototyping with Gemini models and structured outputs.", resourceType: "offer", url: "https://aistudio.google.com", priceLabel: "Free access", tags: "gemini,prototyping", featured: false, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }
-];
 function normalizeArticle(article) {
   return { ...article, tags: article.tags ? article.tags.split(",").map((tag) => tag.trim()).filter(Boolean) : [] };
 }
@@ -593,12 +567,6 @@ async function updateArticle(id, input) {
   const rows = await db.select().from(articles).where(eq(articles.id, id)).limit(1);
   return rows[0];
 }
-var seriesLabels = {
-  "five-minute-ai-brief": "The 5-Minute AI Brief",
-  "prompt-clinic": "Prompt Clinic",
-  "workflow-autopsy": "Workflow Autopsy",
-  "free-tool-friday": "Free Tool Friday"
-};
 async function subscribeEmail(email, source = "homepage") {
   const preferenceToken = nanoid(32);
   const db = await getDb();
@@ -813,15 +781,6 @@ async function updateAdPlacement(slotKey, input) {
   const rows = await db.select().from(adPlacements).where(eq(adPlacements.slotKey, slotKey)).limit(1);
   return rows[0] ?? null;
 }
-var DEFAULT_SYSTEM_SETTINGS = [
-  { key: "site.faviconUrl", value: "/favicon.svg" },
-  { key: "site.ogImageUrl", value: "/og-image.svg" },
-  { key: "publication.defaultTimeZone", value: "UTC" },
-  { key: "analytics.retentionDays", value: "30" },
-  { key: "editorial.minimumConfidence", value: "70" },
-  { key: "owner.theme", value: "dark" },
-  { key: "owner.accentColor", value: "#d6ff56" }
-];
 function mergeSystemSettings(stored) {
   const storedKeys = new Set(stored.map((setting) => setting.key));
   return [...DEFAULT_SYSTEM_SETTINGS.filter((setting) => !storedKeys.has(setting.key)), ...stored];
@@ -853,8 +812,151 @@ async function getLaunchReadiness() {
   ];
   return { ready: checks.every((check) => check.ready), checks };
 }
+var _db, seedArticles, seedResources, seriesLabels, DEFAULT_SYSTEM_SETTINGS;
+var init_db = __esm({
+  "server/db.ts"() {
+    "use strict";
+    init_schema();
+    init_env();
+    init_adminOperationsMetrics();
+    init_analyticsExtensions();
+    _db = null;
+    seedArticles = [
+      {
+        id: 1,
+        slug: "the-quiet-ai-workflow-that-saves-hours-every-week",
+        title: "The quiet AI workflow that saves hours every week",
+        excerpt: "A practical system for turning messy research into clear, reusable work with less tab-hopping and more signal.",
+        content: "## The three-pass workflow\n\nMost AI workflows fail because the prompt is asked to do too much at once. Use three short passes instead.\n\n### 1. Collect\n\nPaste the raw material into a capture prompt and ask for claims, unknowns, and source links.\n\n### 2. Shape\n\nTurn the capture into a structured brief.\n\n### 3. Ship\n\nAsk for a final output using the brief as the only source of truth.\n\nPrompt template:\n\nYou are an editorial researcher. Extract claims, open questions, and links from the material below. Return JSON with keys: claims, questions, sources.",
+        category: "hacks",
+        seriesKey: "workflow-autopsy",
+        authorName: "Hamispro Editorial",
+        coverImageUrl: null,
+        coverImageKey: null,
+        tags: "workflow,prompts,productivity",
+        seoTitle: null,
+        seoDescription: null,
+        readingTimeMinutes: 7,
+        featured: true,
+        published: true,
+        publishedAt: /* @__PURE__ */ new Date("2026-08-08T09:00:00Z"),
+        createdAt: /* @__PURE__ */ new Date("2026-08-08T09:00:00Z"),
+        updatedAt: /* @__PURE__ */ new Date("2026-08-08T09:00:00Z")
+      },
+      {
+        id: 2,
+        slug: "the-prompt-debugging-checklist",
+        title: "The prompt-debugging checklist",
+        excerpt: "When an AI answer feels almost right, diagnose the prompt instead of rewriting it from scratch.",
+        content: ["## Prompt quality is observable", "", "Use this checklist before adding more words: context, constraints, examples, format, and evaluation.", "", "### A compact diagnostic", "", "const prompt = { context: 'Who is this for?', task: 'What should happen?', constraints: ['length', 'tone', 'sources'], format: 'What should the answer look like?' };", "", "The fastest improvement usually comes from specifying the output shape."].join("\n"),
+        category: "prompts",
+        seriesKey: "prompt-clinic",
+        authorName: "Hamispro Labs",
+        coverImageUrl: null,
+        coverImageKey: null,
+        tags: "prompting,debugging,templates",
+        seoTitle: null,
+        seoDescription: null,
+        readingTimeMinutes: 5,
+        featured: false,
+        published: true,
+        publishedAt: /* @__PURE__ */ new Date("2026-08-06T09:00:00Z"),
+        createdAt: /* @__PURE__ */ new Date("2026-08-06T09:00:00Z"),
+        updatedAt: /* @__PURE__ */ new Date("2026-08-06T09:00:00Z")
+      },
+      {
+        id: 3,
+        slug: "seven-free-ai-tools-worth-bookmarking",
+        title: "Seven free AI tools worth bookmarking",
+        excerpt: "A tested starter set for research, writing, design, coding, and automation without a paid seat.",
+        content: "## A small vault beats a crowded toolbox\n\nThese tools are useful because each one has a clear job. Start with one workflow and add only what removes a real bottleneck.",
+        category: "freebies",
+        seriesKey: "free-tool-friday",
+        authorName: "Hamispro Editorial",
+        coverImageUrl: null,
+        coverImageKey: null,
+        tags: "freebies,tools,resources",
+        seoTitle: null,
+        seoDescription: null,
+        readingTimeMinutes: 6,
+        featured: false,
+        published: true,
+        publishedAt: /* @__PURE__ */ new Date("2026-08-04T09:00:00Z"),
+        createdAt: /* @__PURE__ */ new Date("2026-08-04T09:00:00Z"),
+        updatedAt: /* @__PURE__ */ new Date("2026-08-04T09:00:00Z")
+      },
+      {
+        id: 4,
+        slug: "build-a-personal-ai-research-desk",
+        title: "Build a personal AI research desk",
+        excerpt: "A tutorial for turning your browser, notes, and favorite model into a calmer research environment.",
+        content: "## Start with the information loop\n\nYour research desk needs capture, retrieval, synthesis, and publishing. This guide maps each stage to a simple tool and a repeatable prompt.",
+        category: "tutorials",
+        seriesKey: null,
+        authorName: "Hamispro Labs",
+        coverImageUrl: null,
+        coverImageKey: null,
+        tags: "tutorial,automation,research",
+        seoTitle: null,
+        seoDescription: null,
+        readingTimeMinutes: 11,
+        featured: false,
+        published: true,
+        publishedAt: /* @__PURE__ */ new Date("2026-08-01T09:00:00Z"),
+        createdAt: /* @__PURE__ */ new Date("2026-08-01T09:00:00Z"),
+        updatedAt: /* @__PURE__ */ new Date("2026-08-01T09:00:00Z")
+      },
+      {
+        id: 5,
+        slug: "why-small-models-are-having-a-big-week",
+        title: "Why small models are having a big week",
+        excerpt: "What efficient models mean for local workflows, private data, and the next generation of AI products.",
+        content: "## Efficiency is becoming a product feature\n\nSmaller models are making AI more portable, cheaper to run, and easier to adapt to a focused job.",
+        category: "news",
+        seriesKey: "five-minute-ai-brief",
+        authorName: "Hamispro Newsroom",
+        coverImageUrl: null,
+        coverImageKey: null,
+        tags: "news,models,industry",
+        seoTitle: null,
+        seoDescription: null,
+        readingTimeMinutes: 4,
+        featured: false,
+        published: true,
+        publishedAt: /* @__PURE__ */ new Date("2026-07-30T09:00:00Z"),
+        createdAt: /* @__PURE__ */ new Date("2026-07-30T09:00:00Z"),
+        updatedAt: /* @__PURE__ */ new Date("2026-07-30T09:00:00Z")
+      }
+    ];
+    seedResources = [
+      { id: 1, slug: "hugging-face", name: "Hugging Face", description: "Open model hub, datasets, demos, and spaces for experimenting with modern AI.", resourceType: "model", url: "https://huggingface.co", priceLabel: "Free tier", tags: "models,open-source", featured: true, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() },
+      { id: 2, slug: "ollama", name: "Ollama", description: "Run a growing library of open models locally with a simple developer workflow.", resourceType: "tool", url: "https://ollama.com", priceLabel: "Free", tags: "local,developer", featured: true, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() },
+      { id: 3, slug: "prompt-library-starter", name: "Prompt Library Starter", description: "A clean, reusable prompt-library structure for teams and solo creators.", resourceType: "template", url: "#", priceLabel: "Free download", tags: "prompts,templates", featured: true, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() },
+      { id: 4, slug: "google-ai-studio", name: "Google AI Studio", description: "A generous playground for prototyping with Gemini models and structured outputs.", resourceType: "offer", url: "https://aistudio.google.com", priceLabel: "Free access", tags: "gemini,prototyping", featured: false, createdAt: /* @__PURE__ */ new Date(), updatedAt: /* @__PURE__ */ new Date() }
+    ];
+    seriesLabels = {
+      "five-minute-ai-brief": "The 5-Minute AI Brief",
+      "prompt-clinic": "Prompt Clinic",
+      "workflow-autopsy": "Workflow Autopsy",
+      "free-tool-friday": "Free Tool Friday"
+    };
+    DEFAULT_SYSTEM_SETTINGS = [
+      { key: "site.faviconUrl", value: "/favicon.svg" },
+      { key: "site.ogImageUrl", value: "/og-image.svg" },
+      { key: "publication.defaultTimeZone", value: "UTC" },
+      { key: "analytics.retentionDays", value: "30" },
+      { key: "editorial.minimumConfidence", value: "70" },
+      { key: "owner.theme", value: "dark" },
+      { key: "owner.accentColor", value: "#d6ff56" }
+    ];
+  }
+});
 
 // server/_core/cookies.ts
+var cookies_exports = {};
+__export(cookies_exports, {
+  getSessionCookieOptions: () => getSessionCookieOptions
+});
 function isSecureRequest(req) {
   if (req.protocol === "https") return true;
   const forwardedProto = req.headers["x-forwarded-proto"];
@@ -870,246 +972,36 @@ function getSessionCookieOptions(req) {
     secure: isSecureRequest(req)
   };
 }
+var init_cookies = __esm({
+  "server/_core/cookies.ts"() {
+    "use strict";
+  }
+});
 
 // shared/_core/errors.ts
-var HttpError = class extends Error {
-  constructor(statusCode, message) {
-    super(message);
-    this.statusCode = statusCode;
-    this.name = "HttpError";
+var HttpError, ForbiddenError;
+var init_errors = __esm({
+  "shared/_core/errors.ts"() {
+    "use strict";
+    HttpError = class extends Error {
+      constructor(statusCode, message) {
+        super(message);
+        this.statusCode = statusCode;
+        this.name = "HttpError";
+      }
+    };
+    ForbiddenError = (msg) => new HttpError(403, msg);
   }
-};
-var ForbiddenError = (msg) => new HttpError(403, msg);
+});
 
 // server/_core/sdk.ts
+var sdk_exports = {};
+__export(sdk_exports, {
+  sdk: () => sdk
+});
 import axios from "axios";
 import { parse as parseCookieHeader } from "cookie";
 import { SignJWT, jwtVerify } from "jose";
-var isNonEmptyString = (value) => typeof value === "string" && value.length > 0;
-var EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
-var GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
-var GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
-var OAuthService = class {
-  constructor(client) {
-    this.client = client;
-    console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
-    if (!ENV.oAuthServerUrl) {
-      console.error(
-        "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
-      );
-    }
-  }
-  decodeState(state) {
-    return decodeOAuthState(state).redirectUri;
-  }
-  async getTokenByCode(code, state) {
-    const payload = {
-      clientId: ENV.appId,
-      grantType: "authorization_code",
-      code,
-      redirectUri: this.decodeState(state)
-    };
-    const { data } = await this.client.post(
-      EXCHANGE_TOKEN_PATH,
-      payload
-    );
-    return data;
-  }
-  async getUserInfoByToken(token) {
-    const { data } = await this.client.post(
-      GET_USER_INFO_PATH,
-      {
-        accessToken: token.accessToken
-      }
-    );
-    return data;
-  }
-};
-var createOAuthHttpClient = () => axios.create({
-  baseURL: ENV.oAuthServerUrl,
-  timeout: AXIOS_TIMEOUT_MS
-});
-var SDKServer = class {
-  client;
-  oauthService;
-  constructor(client = createOAuthHttpClient()) {
-    this.client = client;
-    this.oauthService = new OAuthService(this.client);
-  }
-  deriveLoginMethod(platforms, fallback) {
-    if (fallback && fallback.length > 0) return fallback;
-    if (!Array.isArray(platforms) || platforms.length === 0) return null;
-    const set = new Set(
-      platforms.filter((p) => typeof p === "string")
-    );
-    if (set.has("REGISTERED_PLATFORM_EMAIL")) return "email";
-    if (set.has("REGISTERED_PLATFORM_GOOGLE")) return "google";
-    if (set.has("REGISTERED_PLATFORM_APPLE")) return "apple";
-    if (set.has("REGISTERED_PLATFORM_MICROSOFT") || set.has("REGISTERED_PLATFORM_AZURE"))
-      return "microsoft";
-    if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
-    const first = Array.from(set)[0];
-    return first ? first.toLowerCase() : null;
-  }
-  /**
-   * Exchange OAuth authorization code for access token
-   * @example
-   * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-   */
-  async exchangeCodeForToken(code, state) {
-    return this.oauthService.getTokenByCode(code, state);
-  }
-  /**
-   * Get user information using access token
-   * @example
-   * const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
-   */
-  async getUserInfo(accessToken) {
-    const data = await this.oauthService.getUserInfoByToken({
-      accessToken
-    });
-    const loginMethod = this.deriveLoginMethod(
-      data?.platforms,
-      data?.platform ?? data.platform ?? null
-    );
-    return {
-      ...data,
-      platform: loginMethod,
-      loginMethod
-    };
-  }
-  parseCookies(cookieHeader) {
-    if (!cookieHeader) {
-      return /* @__PURE__ */ new Map();
-    }
-    const parsed = parseCookieHeader(cookieHeader);
-    return new Map(Object.entries(parsed));
-  }
-  getSessionSecret() {
-    const secret = ENV.cookieSecret;
-    return new TextEncoder().encode(secret);
-  }
-  /**
-   * Create a session token for a Manus user openId
-   * @example
-   * const sessionToken = await sdk.createSessionToken(userInfo.openId);
-   */
-  async createSessionToken(openId, options = {}) {
-    return this.signSession(
-      {
-        openId,
-        appId: ENV.appId,
-        name: options.name || ""
-      },
-      options
-    );
-  }
-  async signSession(payload, options = {}) {
-    const issuedAt = Date.now();
-    const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
-    const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1e3);
-    const secretKey = this.getSessionSecret();
-    return new SignJWT({
-      openId: payload.openId,
-      appId: payload.appId,
-      name: payload.name
-    }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(expirationSeconds).sign(secretKey);
-  }
-  async verifySession(cookieValue) {
-    if (!cookieValue) {
-      console.warn("[Auth] Missing session cookie");
-      return null;
-    }
-    try {
-      const secretKey = this.getSessionSecret();
-      const { payload } = await jwtVerify(cookieValue, secretKey, {
-        algorithms: ["HS256"]
-      });
-      const { openId, appId, name } = payload;
-      if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) {
-        console.warn("[Auth] Session payload missing required fields");
-        return null;
-      }
-      return {
-        openId,
-        appId,
-        name
-      };
-    } catch (error) {
-      console.warn("[Auth] Session verification failed", String(error));
-      return null;
-    }
-  }
-  async getUserInfoWithJwt(jwtToken) {
-    const payload = {
-      jwtToken,
-      projectId: ENV.appId
-    };
-    const { data } = await this.client.post(
-      GET_USER_INFO_WITH_JWT_PATH,
-      payload
-    );
-    const loginMethod = this.deriveLoginMethod(
-      data?.platforms,
-      data?.platform ?? data.platform ?? null
-    );
-    return {
-      ...data,
-      platform: loginMethod,
-      loginMethod
-    };
-  }
-  async authenticateRequest(req) {
-    const cookies = this.parseCookies(req.headers.cookie);
-    let sessionToken = cookies.get(COOKIE_NAME);
-    if (!sessionToken) {
-      const authHeader = req.headers.authorization;
-      if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
-        sessionToken = authHeader.slice(7);
-      }
-    }
-    const session = await this.verifySession(sessionToken);
-    if (!session) {
-      throw ForbiddenError("Invalid session cookie");
-    }
-    if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {
-      const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-      const taskUid = userInfo.taskUid ?? null;
-      if (!taskUid) {
-        throw ForbiddenError("Cron session missing task_uid");
-      }
-      return buildCronUser(userInfo);
-    }
-    const sessionUserId = session.openId;
-    const signedInAt = /* @__PURE__ */ new Date();
-    let user = await getUserByOpenId(sessionUserId);
-    if (!user) {
-      try {
-        const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
-        await upsertUser({
-          openId: userInfo.openId,
-          name: userInfo.name || null,
-          email: userInfo.email ?? null,
-          loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
-          lastSignedIn: signedInAt
-        });
-        user = await getUserByOpenId(userInfo.openId);
-      } catch (error) {
-        console.error("[Auth] Failed to sync user from OAuth:", error);
-        throw ForbiddenError("Failed to sync user info");
-      }
-    }
-    if (!user) {
-      throw ForbiddenError("User not found");
-    }
-    await upsertUser({
-      openId: user.openId,
-      lastSignedIn: signedInAt
-    });
-    return user;
-  }
-};
-var CRON_OPEN_ID_PREFIX = "cron_";
 function buildCronUser(userInfo) {
   const now = /* @__PURE__ */ new Date();
   return {
@@ -1126,9 +1018,254 @@ function buildCronUser(userInfo) {
     isCron: true
   };
 }
-var sdk = new SDKServer();
+var isNonEmptyString, EXCHANGE_TOKEN_PATH, GET_USER_INFO_PATH, GET_USER_INFO_WITH_JWT_PATH, OAuthService, createOAuthHttpClient, SDKServer, CRON_OPEN_ID_PREFIX, sdk;
+var init_sdk = __esm({
+  "server/_core/sdk.ts"() {
+    "use strict";
+    init_const();
+    init_errors();
+    init_db();
+    init_env();
+    isNonEmptyString = (value) => typeof value === "string" && value.length > 0;
+    EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
+    GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
+    GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
+    OAuthService = class {
+      constructor(client) {
+        this.client = client;
+        console.log("[OAuth] Initialized with baseURL:", ENV.oAuthServerUrl);
+        if (!ENV.oAuthServerUrl) {
+          console.error(
+            "[OAuth] ERROR: OAUTH_SERVER_URL is not configured! Set OAUTH_SERVER_URL environment variable."
+          );
+        }
+      }
+      decodeState(state) {
+        return decodeOAuthState(state).redirectUri;
+      }
+      async getTokenByCode(code, state) {
+        const payload = {
+          clientId: ENV.appId,
+          grantType: "authorization_code",
+          code,
+          redirectUri: this.decodeState(state)
+        };
+        const { data } = await this.client.post(
+          EXCHANGE_TOKEN_PATH,
+          payload
+        );
+        return data;
+      }
+      async getUserInfoByToken(token) {
+        const { data } = await this.client.post(
+          GET_USER_INFO_PATH,
+          {
+            accessToken: token.accessToken
+          }
+        );
+        return data;
+      }
+    };
+    createOAuthHttpClient = () => axios.create({
+      baseURL: ENV.oAuthServerUrl,
+      timeout: AXIOS_TIMEOUT_MS
+    });
+    SDKServer = class {
+      client;
+      oauthService;
+      constructor(client = createOAuthHttpClient()) {
+        this.client = client;
+        this.oauthService = new OAuthService(this.client);
+      }
+      deriveLoginMethod(platforms, fallback) {
+        if (fallback && fallback.length > 0) return fallback;
+        if (!Array.isArray(platforms) || platforms.length === 0) return null;
+        const set = new Set(
+          platforms.filter((p) => typeof p === "string")
+        );
+        if (set.has("REGISTERED_PLATFORM_EMAIL")) return "email";
+        if (set.has("REGISTERED_PLATFORM_GOOGLE")) return "google";
+        if (set.has("REGISTERED_PLATFORM_APPLE")) return "apple";
+        if (set.has("REGISTERED_PLATFORM_MICROSOFT") || set.has("REGISTERED_PLATFORM_AZURE"))
+          return "microsoft";
+        if (set.has("REGISTERED_PLATFORM_GITHUB")) return "github";
+        const first = Array.from(set)[0];
+        return first ? first.toLowerCase() : null;
+      }
+      /**
+       * Exchange OAuth authorization code for access token
+       * @example
+       * const tokenResponse = await sdk.exchangeCodeForToken(code, state);
+       */
+      async exchangeCodeForToken(code, state) {
+        return this.oauthService.getTokenByCode(code, state);
+      }
+      /**
+       * Get user information using access token
+       * @example
+       * const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
+       */
+      async getUserInfo(accessToken) {
+        const data = await this.oauthService.getUserInfoByToken({
+          accessToken
+        });
+        const loginMethod = this.deriveLoginMethod(
+          data?.platforms,
+          data?.platform ?? data.platform ?? null
+        );
+        return {
+          ...data,
+          platform: loginMethod,
+          loginMethod
+        };
+      }
+      parseCookies(cookieHeader) {
+        if (!cookieHeader) {
+          return /* @__PURE__ */ new Map();
+        }
+        const parsed = parseCookieHeader(cookieHeader);
+        return new Map(Object.entries(parsed));
+      }
+      getSessionSecret() {
+        const secret = ENV.cookieSecret;
+        return new TextEncoder().encode(secret);
+      }
+      /**
+       * Create a session token for a Manus user openId
+       * @example
+       * const sessionToken = await sdk.createSessionToken(userInfo.openId);
+       */
+      async createSessionToken(openId, options = {}) {
+        return this.signSession(
+          {
+            openId,
+            appId: ENV.appId,
+            name: options.name || ""
+          },
+          options
+        );
+      }
+      async signSession(payload, options = {}) {
+        const issuedAt = Date.now();
+        const expiresInMs = options.expiresInMs ?? ONE_YEAR_MS;
+        const expirationSeconds = Math.floor((issuedAt + expiresInMs) / 1e3);
+        const secretKey = this.getSessionSecret();
+        return new SignJWT({
+          openId: payload.openId,
+          appId: payload.appId,
+          name: payload.name
+        }).setProtectedHeader({ alg: "HS256", typ: "JWT" }).setExpirationTime(expirationSeconds).sign(secretKey);
+      }
+      async verifySession(cookieValue) {
+        if (!cookieValue) {
+          console.warn("[Auth] Missing session cookie");
+          return null;
+        }
+        try {
+          const secretKey = this.getSessionSecret();
+          const { payload } = await jwtVerify(cookieValue, secretKey, {
+            algorithms: ["HS256"]
+          });
+          const { openId, appId, name } = payload;
+          if (!isNonEmptyString(openId) || !isNonEmptyString(appId) || !isNonEmptyString(name)) {
+            console.warn("[Auth] Session payload missing required fields");
+            return null;
+          }
+          return {
+            openId,
+            appId,
+            name
+          };
+        } catch (error) {
+          console.warn("[Auth] Session verification failed", String(error));
+          return null;
+        }
+      }
+      async getUserInfoWithJwt(jwtToken) {
+        const payload = {
+          jwtToken,
+          projectId: ENV.appId
+        };
+        const { data } = await this.client.post(
+          GET_USER_INFO_WITH_JWT_PATH,
+          payload
+        );
+        const loginMethod = this.deriveLoginMethod(
+          data?.platforms,
+          data?.platform ?? data.platform ?? null
+        );
+        return {
+          ...data,
+          platform: loginMethod,
+          loginMethod
+        };
+      }
+      async authenticateRequest(req) {
+        const cookies = this.parseCookies(req.headers.cookie);
+        let sessionToken = cookies.get(COOKIE_NAME);
+        if (!sessionToken) {
+          const authHeader = req.headers.authorization;
+          if (typeof authHeader === "string" && authHeader.startsWith("Bearer ")) {
+            sessionToken = authHeader.slice(7);
+          }
+        }
+        const session = await this.verifySession(sessionToken);
+        if (!session) {
+          throw ForbiddenError("Invalid session cookie");
+        }
+        if (session.openId.startsWith(CRON_OPEN_ID_PREFIX)) {
+          const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
+          const taskUid = userInfo.taskUid ?? null;
+          if (!taskUid) {
+            throw ForbiddenError("Cron session missing task_uid");
+          }
+          return buildCronUser(userInfo);
+        }
+        const sessionUserId = session.openId;
+        const signedInAt = /* @__PURE__ */ new Date();
+        let user = await getUserByOpenId(sessionUserId);
+        if (!user) {
+          try {
+            const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
+            await upsertUser({
+              openId: userInfo.openId,
+              name: userInfo.name || null,
+              email: userInfo.email ?? null,
+              loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+              lastSignedIn: signedInAt
+            });
+            user = await getUserByOpenId(userInfo.openId);
+          } catch (error) {
+            console.error("[Auth] Failed to sync user from OAuth:", error);
+            throw ForbiddenError("Failed to sync user info");
+          }
+        }
+        if (!user) {
+          throw ForbiddenError("User not found");
+        }
+        await upsertUser({
+          openId: user.openId,
+          lastSignedIn: signedInAt
+        });
+        return user;
+      }
+    };
+    CRON_OPEN_ID_PREFIX = "cron_";
+    sdk = new SDKServer();
+  }
+});
+
+// server/_core/app.ts
+import "dotenv/config";
+import express2 from "express";
+import { createExpressMiddleware } from "@trpc/server/adapters/express";
 
 // server/_core/oauth.ts
+init_const();
+init_db();
+init_cookies();
+init_sdk();
+import { parse as parseCookieHeader2 } from "cookie";
 function getQueryParam(req, key) {
   const value = req.query[key];
   return typeof value === "string" ? value : void 0;
@@ -1177,6 +1314,7 @@ function registerOAuthRoutes(app2) {
 }
 
 // server/_core/storageProxy.ts
+init_env();
 function registerStorageProxy(app2) {
   app2.get("/manus-storage/*", async (req, res) => {
     const key = req.params[0];
@@ -1218,6 +1356,8 @@ function registerStorageProxy(app2) {
 }
 
 // server/routers.ts
+init_const();
+init_cookies();
 import { z as z2 } from "zod";
 import { TRPCError as TRPCError4 } from "@trpc/server";
 
@@ -1225,6 +1365,7 @@ import { TRPCError as TRPCError4 } from "@trpc/server";
 import { z } from "zod";
 
 // server/_core/notification.ts
+init_env();
 import { TRPCError } from "@trpc/server";
 var TITLE_MAX_LENGTH = 1200;
 var CONTENT_MAX_LENGTH = 2e4;
@@ -1307,6 +1448,7 @@ async function notifyOwner(payload) {
 }
 
 // server/_core/trpc.ts
+init_const();
 import { initTRPC, TRPCError as TRPCError2 } from "@trpc/server";
 import superjson from "superjson";
 var t = initTRPC.context().create({
@@ -1365,6 +1507,7 @@ var systemRouter = router({
 });
 
 // server/_core/llm.ts
+init_env();
 var ensureArray = (value) => Array.isArray(value) ? value : [value];
 var normalizeContentPart = (part) => {
   if (typeof part === "string") {
@@ -1600,6 +1743,7 @@ async function listLLMModels() {
 }
 
 // server/storage.ts
+init_env();
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 function normalizeKey(relKey) {
@@ -1640,7 +1784,13 @@ async function storagePut(relKey, data, contentType = "application/octet-stream"
   return builtInStoragePut(key, data, contentType);
 }
 
+// server/routers.ts
+init_db();
+init_env();
+init_analyticsExtensions();
+
 // server/adminSecurity.ts
+init_db();
 import { TRPCError as TRPCError3 } from "@trpc/server";
 var buckets = /* @__PURE__ */ new Map();
 var DEFAULT_LIMITS = {
@@ -1938,6 +2088,7 @@ Existing suggestion: ${input.mode === "summary" ? item.aiSummary || "none" : inp
 });
 
 // server/_core/context.ts
+init_sdk();
 async function createContext(opts) {
   let user = null;
   try {
@@ -1952,9 +2103,17 @@ async function createContext(opts) {
   };
 }
 
+// server/digestScheduler.ts
+init_sdk();
+init_db();
+
+// server/editorialScheduler.ts
+init_sdk();
+
 // server/editorialIngestion.ts
 import { XMLParser } from "fast-xml-parser";
 import crypto2 from "crypto";
+init_db();
 var parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
@@ -2189,162 +2348,11 @@ async function handleDigestScheduled(req, res) {
 
 // server/_core/vite.ts
 import express from "express";
-import fs2 from "fs";
+import fs from "fs";
 import { nanoid as nanoid2 } from "nanoid";
-import path2 from "path";
+import path from "path";
 import { pathToFileURL } from "url";
-import { createServer as createViteServer } from "vite";
 import superjson2 from "superjson";
-
-// vite.config.ts
-import { jsxLocPlugin } from "@builder.io/vite-plugin-jsx-loc";
-import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
-import fs from "node:fs";
-import path from "node:path";
-import { defineConfig } from "vite";
-import { vitePluginManusRuntime } from "vite-plugin-manus-runtime";
-var PROJECT_ROOT = import.meta.dirname;
-var LOG_DIR = path.join(PROJECT_ROOT, ".manus-logs");
-var MAX_LOG_SIZE_BYTES = 1 * 1024 * 1024;
-var TRIM_TARGET_BYTES = Math.floor(MAX_LOG_SIZE_BYTES * 0.6);
-function ensureLogDir() {
-  if (!fs.existsSync(LOG_DIR)) {
-    fs.mkdirSync(LOG_DIR, { recursive: true });
-  }
-}
-function trimLogFile(logPath, maxSize) {
-  try {
-    if (!fs.existsSync(logPath) || fs.statSync(logPath).size <= maxSize) {
-      return;
-    }
-    const lines = fs.readFileSync(logPath, "utf-8").split("\n");
-    const keptLines = [];
-    let keptBytes = 0;
-    const targetSize = TRIM_TARGET_BYTES;
-    for (let i = lines.length - 1; i >= 0; i--) {
-      const lineBytes = Buffer.byteLength(`${lines[i]}
-`, "utf-8");
-      if (keptBytes + lineBytes > targetSize) break;
-      keptLines.unshift(lines[i]);
-      keptBytes += lineBytes;
-    }
-    fs.writeFileSync(logPath, keptLines.join("\n"), "utf-8");
-  } catch {
-  }
-}
-function writeToLogFile(source, entries) {
-  if (entries.length === 0) return;
-  ensureLogDir();
-  const logPath = path.join(LOG_DIR, `${source}.log`);
-  const lines = entries.map((entry) => {
-    const ts = (/* @__PURE__ */ new Date()).toISOString();
-    return `[${ts}] ${JSON.stringify(entry)}`;
-  });
-  fs.appendFileSync(logPath, `${lines.join("\n")}
-`, "utf-8");
-  trimLogFile(logPath, MAX_LOG_SIZE_BYTES);
-}
-function vitePluginManusDebugCollector() {
-  return {
-    name: "manus-debug-collector",
-    transformIndexHtml(html) {
-      if (process.env.NODE_ENV === "production") {
-        return html;
-      }
-      return {
-        html,
-        tags: [
-          {
-            tag: "script",
-            attrs: {
-              src: "/__manus__/debug-collector.js",
-              defer: true
-            },
-            injectTo: "head"
-          }
-        ]
-      };
-    },
-    configureServer(server) {
-      server.middlewares.use("/__manus__/logs", (req, res, next) => {
-        if (req.method !== "POST") {
-          return next();
-        }
-        const handlePayload = (payload) => {
-          if (payload.consoleLogs?.length > 0) {
-            writeToLogFile("browserConsole", payload.consoleLogs);
-          }
-          if (payload.networkRequests?.length > 0) {
-            writeToLogFile("networkRequests", payload.networkRequests);
-          }
-          if (payload.sessionEvents?.length > 0) {
-            writeToLogFile("sessionReplay", payload.sessionEvents);
-          }
-          res.writeHead(200, { "Content-Type": "application/json" });
-          res.end(JSON.stringify({ success: true }));
-        };
-        const reqBody = req.body;
-        if (reqBody && typeof reqBody === "object") {
-          try {
-            handlePayload(reqBody);
-          } catch (e) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ success: false, error: String(e) }));
-          }
-          return;
-        }
-        let body = "";
-        req.on("data", (chunk) => {
-          body += chunk.toString();
-        });
-        req.on("end", () => {
-          try {
-            const payload = JSON.parse(body);
-            handlePayload(payload);
-          } catch (e) {
-            res.writeHead(400, { "Content-Type": "application/json" });
-            res.end(JSON.stringify({ success: false, error: String(e) }));
-          }
-        });
-      });
-    }
-  };
-}
-var plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusRuntime(), vitePluginManusDebugCollector()];
-var vite_config_default = defineConfig({
-  plugins,
-  resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets")
-    }
-  },
-  envDir: path.resolve(import.meta.dirname),
-  root: path.resolve(import.meta.dirname, "client"),
-  publicDir: path.resolve(import.meta.dirname, "client", "public"),
-  build: {
-    outDir: path.resolve(import.meta.dirname, "dist/public"),
-    emptyOutDir: true
-  },
-  server: {
-    host: true,
-    allowedHosts: [
-      ".manuspre.computer",
-      ".manus.computer",
-      ".manus-asia.computer",
-      ".manuscomputer.ai",
-      ".manusvm.computer",
-      "localhost",
-      "127.0.0.1"
-    ],
-    fs: {
-      strict: true,
-      deny: ["**/.*"]
-    }
-  }
-});
 
 // server/_core/ssrCaller.ts
 async function buildSsrPrefetch(req, res) {
@@ -2395,41 +2403,41 @@ function getFallbackTemplate() {
 }
 function findPublicDistPath() {
   const candidates = [
-    path2.resolve(process.cwd(), "dist", "public"),
-    path2.resolve(import.meta.dirname, "public"),
-    path2.resolve(import.meta.dirname, "..", "public"),
-    path2.resolve(import.meta.dirname, "../dist/public"),
-    path2.resolve(import.meta.dirname, "../../dist/public"),
-    path2.resolve(process.cwd(), "client")
+    path.resolve(process.cwd(), "dist", "public"),
+    path.resolve(import.meta.dirname, "public"),
+    path.resolve(import.meta.dirname, "..", "public"),
+    path.resolve(import.meta.dirname, "../dist/public"),
+    path.resolve(import.meta.dirname, "../../dist/public"),
+    path.resolve(process.cwd(), "client")
   ];
   for (const c of candidates) {
-    if (fs2.existsSync(c)) return c;
+    if (fs.existsSync(c)) return c;
   }
-  return path2.resolve(process.cwd(), "dist", "public");
+  return path.resolve(process.cwd(), "dist", "public");
 }
 async function findTemplate() {
   const candidates = [
-    path2.resolve(findPublicDistPath(), "index.html"),
-    path2.resolve(process.cwd(), "dist", "public", "index.html"),
-    path2.resolve(process.cwd(), "client", "index.html"),
-    path2.resolve(import.meta.dirname, "../../client/index.html")
+    path.resolve(findPublicDistPath(), "index.html"),
+    path.resolve(process.cwd(), "dist", "public", "index.html"),
+    path.resolve(process.cwd(), "client", "index.html"),
+    path.resolve(import.meta.dirname, "../../client/index.html")
   ];
   for (const c of candidates) {
-    if (fs2.existsSync(c)) {
-      return fs2.promises.readFile(c, "utf-8");
+    if (fs.existsSync(c)) {
+      return fs.promises.readFile(c, "utf-8");
     }
   }
   return getFallbackTemplate();
 }
 async function loadServerEntry() {
   const candidates = [
-    path2.resolve(process.cwd(), "dist", "server", "entry-server.js"),
-    path2.resolve(path2.dirname(findPublicDistPath()), "server", "entry-server.js"),
-    path2.resolve(import.meta.dirname, "server", "entry-server.js"),
-    path2.resolve(import.meta.dirname, "..", "server", "entry-server.js")
+    path.resolve(process.cwd(), "dist", "server", "entry-server.js"),
+    path.resolve(path.dirname(findPublicDistPath()), "server", "entry-server.js"),
+    path.resolve(import.meta.dirname, "server", "entry-server.js"),
+    path.resolve(import.meta.dirname, "..", "server", "entry-server.js")
   ];
   for (const c of candidates) {
-    if (fs2.existsSync(c)) {
+    if (fs.existsSync(c)) {
       try {
         const fileUrl = pathToFileURL(c).href;
         return await import(fileUrl);
@@ -2479,7 +2487,7 @@ function serveStatic(app2) {
     if (req.path.length > 1 && req.path.endsWith("/")) return res.redirect(301, req.path.slice(0, -1) + (req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : ""));
     next();
   });
-  if (fs2.existsSync(distPath)) {
+  if (fs.existsSync(distPath)) {
     app2.use(express.static(distPath, { index: false, redirect: false, maxAge: "1y", immutable: true }));
   }
   app2.use("*", async (req, res) => {
@@ -2503,6 +2511,30 @@ function createApp() {
   registerOAuthRoutes(app2);
   app2.post("/api/scheduled/sendDigest", handleDigestScheduled);
   app2.post("/api/scheduled/ingestEditorial", handleEditorialScheduled);
+  app2.post("/api/auth/login-direct", async (req, res) => {
+    try {
+      const { password } = req.body;
+      const { ENV: ENV2 } = await Promise.resolve().then(() => (init_env(), env_exports));
+      if (!password || password !== ENV2.ownerOpenId) {
+        res.status(403).json({ error: "Invalid credentials" });
+        return;
+      }
+      const { getUserByOpenId: getUserByOpenId3, upsertUser: upsertUser3 } = await Promise.resolve().then(() => (init_db(), db_exports));
+      let user = await getUserByOpenId3(password);
+      if (!user) {
+        await upsertUser3({ openId: password, name: "Owner", email: "owner@hamispro.io", loginMethod: "direct", lastSignedIn: /* @__PURE__ */ new Date() });
+      }
+      const { sdk: sdk2 } = await Promise.resolve().then(() => (init_sdk(), sdk_exports));
+      const sessionToken = await sdk2.createSessionToken(password, { name: "Owner" });
+      const { getSessionCookieOptions: getSessionCookieOptions2 } = await Promise.resolve().then(() => (init_cookies(), cookies_exports));
+      const { COOKIE_NAME: COOKIE_NAME2, ONE_YEAR_MS: ONE_YEAR_MS3 } = await Promise.resolve().then(() => (init_const(), const_exports));
+      res.cookie(COOKIE_NAME2, sessionToken, { ...getSessionCookieOptions2(req), maxAge: ONE_YEAR_MS3 });
+      res.json({ success: true });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
   app2.use(
     "/api/trpc",
     createExpressMiddleware({

@@ -1,15 +1,16 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { COOKIE_NAME } from "@shared/const";
+import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import { invokeLLM, listLLMModels } from "./_core/llm";
 import { storagePut } from "./storage";
-import { createArticle, getArticleBySlug, listAdminAuditLogs, listAllArticles, listPublicArticles, listResources, subscribeEmail, updateArticle, getDigestPreferencesByToken, updateDigestPreferencesByToken, seriesLabels, listEditorialSources, listEditorialQueue, listIngestionRuns, getEditorialItemById, updateEditorialItem, getDashboardMetrics, getLaunchReadiness, listAdPlacements, updateAdPlacement, listSystemSettings, setSystemSetting, trackAnalyticsEvent } from "./db";
+import { createArticle, getArticleBySlug, listAdminAuditLogs, listAllArticles, listPublicArticles, listResources, subscribeEmail, updateArticle, getDigestPreferencesByToken, updateDigestPreferencesByToken, seriesLabels, listEditorialSources, listEditorialQueue, listIngestionRuns, getEditorialItemById, updateEditorialItem, getDashboardMetrics, getLaunchReadiness, listAdPlacements, updateAdPlacement, listSystemSettings, setSystemSetting, trackAnalyticsEvent, upsertUser, getUserByOpenId } from "./db";
 import { ENV } from "./_core/env";
 import { generateAnalyticsCsv } from "./analyticsExtensions";
 import { auditAdminAction, enforceAdminRateLimit } from "./adminSecurity";
+import { sdk } from "./_core/sdk";
 
 const categories = ["hacks", "prompts", "freebies", "tutorials", "news"] as const;
 const resourceTypes = ["tool", "model", "template", "offer"] as const;
