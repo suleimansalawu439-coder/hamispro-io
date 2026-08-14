@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express, { type Express } from "express";
+import express, { type Express, type Request, type Response, type NextFunction } from "express";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStorageProxy } from "./storageProxy";
@@ -35,6 +35,17 @@ export function createApp(): Express {
   if (process.env.NODE_ENV !== "development") {
     serveStatic(app);
   }
+
+  // Fallback global error handler to prevent unhandled serverless function crashes
+  app.use((err: any, req: Request, res: Response, _next: NextFunction) => {
+    console.error("[App Error]", err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: err instanceof Error ? err.message : "Internal Server Error",
+        path: req.originalUrl,
+      });
+    }
+  });
 
   return app;
 }

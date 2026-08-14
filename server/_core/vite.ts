@@ -3,6 +3,7 @@ import fs from "fs";
 import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
+import { pathToFileURL } from "url";
 import { createServer as createViteServer } from "vite";
 import superjson from "superjson";
 import viteConfig from "../../vite.config";
@@ -54,6 +55,7 @@ function getFallbackTemplate() {
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <!--app-head-->
   </head>
   <body>
@@ -103,7 +105,7 @@ export async function loadServerEntry(): Promise<any> {
   for (const c of candidates) {
     if (fs.existsSync(c)) {
       try {
-        const fileUrl = `file:///${c.replace(/\\/g, "/")}`;
+        const fileUrl = pathToFileURL(c).href;
         return await import(fileUrl);
       } catch (err) {
         console.warn("[SSR] Error importing server entry:", err);
@@ -114,10 +116,31 @@ export async function loadServerEntry(): Promise<any> {
 }
 
 async function renderRequest(req: any, res: any, template: string, render?: (url: string, prefetch: any) => Promise<any>) {
+  const rawUrl = req.originalUrl || req.url || "/";
+  const queryIndex = rawUrl.indexOf("?");
+  const pathname = queryIndex === -1 ? rawUrl : rawUrl.slice(0, queryIndex);
+
+  // Admin routes render as a fast client-side SPA to avoid private session SSR overhead
+  if (pathname.startsWith("/admin")) {
+    const adminHead = composeHead({
+      title: "Editorial Desk — Hamispro.io",
+      description: "Private owner-only publishing studio.",
+      noindex: true,
+      canonicalPath: pathname,
+    });
+    const adminHtml = template
+      .replace("<!--app-head-->", adminHead)
+      .replace("<!--app-html-->", () => "");
+    return res
+      .status(200)
+      .set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "private, no-cache, no-store, must-revalidate" })
+      .end(adminHtml);
+  }
+
   try {
     if (render) {
       const prefetch = await buildSsrPrefetch(req, res);
-      const result = await render(req.originalUrl, prefetch);
+      const result = await render(rawUrl, prefetch);
       res
         .status(result.head.notFound ? 404 : 200)
         .set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=0, must-revalidate" })
@@ -129,13 +152,14 @@ async function renderRequest(req: any, res: any, template: string, render?: (url
   }
 
   // Graceful fallback to client SPA
-  const fallbackHtml = template.replace(
-    "<!--app-head-->",
-    composeHead({
-      title: "Hamispro.io — The useful side of AI",
-      description: "Useful signal for the age of AI. Hacks, Prompts, Freebies, Tutorials, and News.",
-    })
-  );
+  const fallbackHead = composeHead({
+    title: "Hamispro.io — The useful side of AI",
+    description: "Useful signal for the age of AI. Hacks, Prompts, Freebies, Tutorials, and News.",
+    canonicalPath: pathname,
+  });
+  const fallbackHtml = template
+    .replace("<!--app-head-->", fallbackHead)
+    .replace("<!--app-html-->", () => "");
   res.status(200).set({ "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=0, must-revalidate" }).end(fallbackHtml);
 }
 
