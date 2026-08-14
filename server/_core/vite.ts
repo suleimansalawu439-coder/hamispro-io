@@ -4,9 +4,7 @@ import { type Server } from "http";
 import { nanoid } from "nanoid";
 import path from "path";
 import { pathToFileURL } from "url";
-import { createServer as createViteServer } from "vite";
 import superjson from "superjson";
-import viteConfig from "../../vite.config";
 import { buildSsrPrefetch } from "./ssrCaller";
 
 export type HeadMeta = {
@@ -164,6 +162,8 @@ async function renderRequest(req: any, res: any, template: string, render?: (url
 }
 
 export async function setupVite(app: Express, server: Server) {
+  const { createServer: createViteServer } = await import("vite");
+  const viteConfig = (await import("../../vite.config")).default;
   const vite = await createViteServer({ ...viteConfig, configFile: false, server: { middlewareMode: true, hmr: { server }, allowedHosts: true as const }, appType: "custom" });
   app.use(vite.middlewares);
   app.use("*", async (req, res, next) => {
