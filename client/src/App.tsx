@@ -14,6 +14,7 @@ import AdminOperationsPage from "./pages/AdminOperationsPage";
 import SearchPage from "./pages/SearchPage";
 import DigestPreferencesPage from "./pages/DigestPreferencesPage";
 import NotFound from "./pages/NotFound";
+import { LoginPage } from "./pages/LoginPage";
 
 function PublicRoutes() {
   return <SiteLayout><Switch>
@@ -28,8 +29,12 @@ function PublicRoutes() {
   </Switch></SiteLayout>;
 }
 
+import AdminSettings from "./pages/AdminSettings";
+
 function Router() {
   return <Switch>
+    <Route path="/admin/login" component={LoginPage} />
+    <Route path="/admin/settings" component={AdminSettings} />
     <Route path="/admin" component={AdminPage} />
     <Route path="/admin/articles" component={AdminPage} />
     <Route path="/admin/queue" component={AdminPage} />

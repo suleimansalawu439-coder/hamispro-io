@@ -26,4 +26,14 @@ export const systemRouter = router({
         success: delivered,
       } as const;
     }),
+
+  publicSettings: publicProcedure
+    .query(async () => {
+      const { listSystemSettings } = await import("../db");
+      const settings = await listSystemSettings();
+      return settings.reduce((acc, curr) => {
+        acc[curr.key] = curr.value;
+        return acc;
+      }, {} as Record<string, string>);
+    }),
 });

@@ -10,6 +10,7 @@ export type SsrPrefetch = {
   contentList: (input: { category?: "hacks" | "prompts" | "freebies" | "tutorials" | "news"; search?: string }) => Promise<RO["content"]["list"]>;
   contentBySlug: (slug: string) => Promise<RO["content"]["bySlug"]>;
   resourcesList: (input: { search?: string; resourceType?: "tool" | "model" | "template" | "offer" }) => Promise<RO["resources"]["list"]>;
+  systemPublicSettings: () => Promise<RO["system"]["publicSettings"]>;
 };
 
 const SITE = "Hamispro.io";
@@ -21,11 +22,24 @@ export async function prefetchForPath(url: string, queryClient: QueryClient, pre
   const queryIndex = url.indexOf("?");
   const rawPath = queryIndex === -1 ? url : url.slice(0, queryIndex);
   const path = decodeURI(rawPath || "/");
+  
+  let globalSettings: Record<string, string> = {};
+  try {
+    globalSettings = await prefetch.systemPublicSettings();
+  } catch (e) {
+    // Ignore if not setup yet
+  }
+  
+  const baseHead = {
+    faviconUrl: globalSettings.site_favicon_url,
+    ogImage: globalSettings.site_og_image_url,
+  };
+
   if (path === "/" || path === "") {
     const input = {};
     const data = await prefetch.contentList(input);
     await seed(queryClient, getQueryKey(trpc.content.list, input, "query"), data);
-    return { title: `${SITE} — The useful side of AI`, description: DEFAULT_DESC, canonicalPath: "/" };
+    return { ...baseHead, title: `${SITE} — The useful side of AI`, description: DEFAULT_DESC, canonicalPath: "/" };
   }
   const categoryMatch = path.match(/^\/category\/(hacks|prompts|tutorials|news)$/);
   if (categoryMatch) {
@@ -34,7 +48,7 @@ export async function prefetchForPath(url: string, queryClient: QueryClient, pre
     const data = await prefetch.contentList(input);
     await seed(queryClient, getQueryKey(trpc.content.list, input, "query"), data);
     const label = category === "hacks" ? "AI Hacks" : category === "prompts" ? "Prompt Cheatsheets" : category === "tutorials" ? "Tutorials" : "AI News";
-    return { title: `${label} — ${SITE}`, description: `Useful ${label.toLowerCase()}, explained with clarity and context.`, canonicalPath: path };
+    return { ...baseHead, title: `${label} — ${SITE}`, description: `Useful ${label.toLowerCase()}, explained with clarity and context.`, canonicalPath: path };
   }
   const articleMatch = path.match(/^\/article\/([^/]+)$/);
   if (articleMatch) {
@@ -42,15 +56,15 @@ export async function prefetchForPath(url: string, queryClient: QueryClient, pre
     const data = await prefetch.contentBySlug(slug);
     const input = { slug };
     await seed(queryClient, getQueryKey(trpc.content.bySlug, input, "query"), data);
-    return { title: `${data.title} — ${SITE}`, description: data.seoDescription || data.excerpt, ogType: "article", ogImage: data.coverImageUrl || undefined, canonicalPath: path, publishedTime: data.publishedAt ? new Date(data.publishedAt).toISOString() : undefined };
+    return { ...baseHead, title: `${data.title} — ${SITE}`, description: data.seoDescription || data.excerpt, ogType: "article", ogImage: data.coverImageUrl || baseHead.ogImage, canonicalPath: path, publishedTime: data.publishedAt ? new Date(data.publishedAt).toISOString() : undefined };
   }
   if (path === "/vault") {
     const input = {};
     const data = await prefetch.resourcesList(input);
     await seed(queryClient, getQueryKey(trpc.resources.list, input, "query"), data);
-    return { title: `Freebies & Tools — ${SITE}`, description: "A thoughtful vault of free AI tools, open models, templates, and offers.", canonicalPath: path };
+    return { ...baseHead, title: `Freebies & Tools — ${SITE}`, description: "A thoughtful vault of free AI tools, open models, templates, and offers.", canonicalPath: path };
   }
-  if (path === "/admin") return { title: `Editorial Desk — ${SITE}`, description: "Private owner-only publishing studio.", canonicalPath: path, noindex: true };
-  if (path === "/search") return { title: `Search — ${SITE}`, description: DEFAULT_DESC, canonicalPath: path, noindex: true };
-  return { title: `Not found — ${SITE}`, description: DEFAULT_DESC, canonicalPath: path, noindex: true, notFound: true };
+  if (path === "/admin") return { ...baseHead, title: `Editorial Desk — ${SITE}`, description: "Private owner-only publishing studio.", canonicalPath: path, noindex: true };
+  if (path === "/search") return { ...baseHead, title: `Search — ${SITE}`, description: DEFAULT_DESC, canonicalPath: path, noindex: true };
+  return { ...baseHead, title: `Not found — ${SITE}`, description: DEFAULT_DESC, canonicalPath: path, noindex: true, notFound: true };
 }

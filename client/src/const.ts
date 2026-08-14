@@ -13,20 +13,5 @@ export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 // with "invalid oauth state". It returns void by design, so there is no URL to
 // stash across renders.
 export const startLogin = () => {
-  const password = window.prompt("Enter Owner Open ID to sign in:");
-  if (!password) return;
-
-  fetch("/api/auth/login-direct", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ password })
-  }).then(res => res.json()).then(data => {
-    if (data.success) {
-      window.location.reload();
-    } else {
-      alert("Invalid credentials.");
-    }
-  }).catch(() => {
-    alert("Invalid credentials.");
-  });
+  window.location.href = "/admin/login";
 };

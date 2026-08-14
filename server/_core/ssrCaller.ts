@@ -9,5 +9,6 @@ export async function buildSsrPrefetch(req: Request, res: Response) {
     contentList: (input: any) => caller.content.list(input),
     contentBySlug: (slug: string) => caller.content.bySlug({ slug }),
     resourcesList: (input: any) => caller.resources.list(input),
+    systemPublicSettings: () => caller.system.publicSettings(),
   };
 }
