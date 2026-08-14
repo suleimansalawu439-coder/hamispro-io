@@ -73,13 +73,17 @@ describe("owner theme system settings persistence", () => {
     const db = {
       select: vi.fn(() => ({ from: vi.fn(async () => rows.map(row => ({ ...row }))) })),
       insert: vi.fn(() => ({
-        values: vi.fn((entry: { key: string; value: string }) => ({
-          onDuplicateKeyUpdate: vi.fn(async () => {
+        values: vi.fn((entry: { key: string; value: string }) => {
+          const handler = async () => {
             const existing = rows.find(row => row.key === entry.key);
             if (existing) existing.value = entry.value;
             else rows.push({ ...entry });
-          }),
-        })),
+          };
+          return {
+            onDuplicateKeyUpdate: vi.fn(handler),
+            onConflictDoUpdate: vi.fn(handler),
+          };
+        }),
       })),
     } as any;
 

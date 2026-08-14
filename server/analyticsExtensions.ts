@@ -2,8 +2,8 @@ export type DateRangeDays = 7 | 30 | 90 | 365;
 
 export function getDateRangeThreshold(days: DateRangeDays): Date {
   const date = new Date();
-  date.setDate(date.getDate() - days);
-  date.setHours(0, 0, 0, 0);
+  date.setUTCDate(date.getUTCDate() - days);
+  date.setUTCHours(0, 0, 0, 0);
   return date;
 }
 
