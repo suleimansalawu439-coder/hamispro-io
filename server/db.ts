@@ -5,7 +5,6 @@ import { adminAuditLogs, adminRateLimitBuckets, articles, InsertArticle, newslet
 import { ENV } from "./_core/env";
 import { aggregateAdEventMetrics, attachAdEventMetrics } from "./adminOperationsMetrics";
 import { getDateRangeThreshold, DateRangeDays } from "./analyticsExtensions";
-import sanitizeHtml from "sanitize-html";
 import { nanoid } from "nanoid";
 
 let _db: ReturnType<typeof drizzle> | null = null;
@@ -207,8 +206,16 @@ function normalizeArticle(article: Article) {
 }
 
 function sanitizeArticleContent(content: string) {
+  if (!content || !content.trim()) return "";
   if (!content.trim().startsWith("<")) return content;
-  return sanitizeHtml(content, { allowedTags: ["p", "br", "strong", "em", "h2", "h3", "ul", "ol", "li", "blockquote", "pre", "code", "a", "hr"], allowedAttributes: { a: ["href", "target", "rel"], code: ["class"] }, allowedSchemes: ["http", "https", "mailto"] });
+  return content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, "")
+    .replace(/<iframe\b[^<]*(?:(?!<\/iframe>)<[^<]*)*<\/iframe>/gi, "")
+    .replace(/<object\b[^<]*(?:(?!<\/object>)<[^<]*)*<\/object>/gi, "")
+    .replace(/<embed\b[^<]*(?:(?!<\/embed>)<[^<]*)*<\/embed>/gi, "")
+    .replace(/\s+on\w+\s*=\s*(?:'[^']*'|"[^"]*"|[^\s>]+)/gi, "")
+    .replace(/(href|src)\s*=\s*(['"])\s*(?:javascript|vbscript|data):/gi, '$1=$2#');
 }
 
 function normalizeResource(resource: Resource) {
