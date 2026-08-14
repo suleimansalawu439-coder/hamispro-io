@@ -36,15 +36,29 @@ class SDKServer {
     }
 
     try {
+      const supabaseUrl = process.env.VITE_SUPABASE_URL;
+      const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY;
+      
+      // If Supabase env vars are provided, use the Supabase API. This handles
+      // both HS256 and the new RS256 default seamlessly without manual keys.
+      if (supabaseUrl && supabaseAnonKey) {
+        const { createClient } = await import("@supabase/supabase-js");
+        const supabase = createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false } });
+        const { data, error } = await supabase.auth.getUser(token);
+        if (error || !data.user) throw error || new Error("No user returned");
+        
+        return {
+          sub: data.user.id,
+          email: data.user.email,
+        };
+      }
+
+      // Fallback: local fast verification for HS256 if JWT_SECRET is explicitly provided
       const secretKey = this.getSessionSecret();
-      const { payload } = await jwtVerify(token, secretKey, {
-        algorithms: ["HS256"],
-      });
+      const { payload } = await jwtVerify(token, secretKey);
       const { sub, email } = payload as Record<string, unknown>;
 
-      if (!isNonEmptyString(sub)) {
-        return null;
-      }
+      if (!isNonEmptyString(sub)) return null;
 
       return {
         sub,
