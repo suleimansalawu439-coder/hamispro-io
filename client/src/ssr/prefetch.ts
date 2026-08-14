@@ -42,7 +42,7 @@ export async function prefetchForPath(url: string, queryClient: QueryClient, pre
     const data = await prefetch.contentBySlug(slug);
     const input = { slug };
     await seed(queryClient, getQueryKey(trpc.content.bySlug, input, "query"), data);
-    return { title: `${data.title} — ${SITE}`, description: data.seoDescription || data.excerpt, ogType: "article", canonicalPath: path, publishedTime: data.publishedAt ? new Date(data.publishedAt).toISOString() : undefined };
+    return { title: `${data.title} — ${SITE}`, description: data.seoDescription || data.excerpt, ogType: "article", ogImage: data.coverImageUrl || undefined, canonicalPath: path, publishedTime: data.publishedAt ? new Date(data.publishedAt).toISOString() : undefined };
   }
   if (path === "/vault") {
     const input = {};

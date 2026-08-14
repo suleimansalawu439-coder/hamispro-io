@@ -88,14 +88,14 @@ describe("owner theme system settings persistence", () => {
     } as any;
 
     const defaults = await listSystemSettings(db);
-    expect(defaults.find(setting => setting.key === "owner.theme")?.value).toBe("light");
+    expect(defaults.find(setting => setting.key === "owner.theme")?.value).toBe("dark");
     expect(defaults.find(setting => setting.key === "owner.accentColor")?.value).toBe("#d6ff56");
 
-    await setSystemSetting("owner.theme", "dark", db);
+    await setSystemSetting("owner.theme", "light", db);
     await setSystemSetting("owner.accentColor", "#8b5cf6", db);
 
     const reloaded = await listSystemSettings(db);
-    expect(reloaded.find(setting => setting.key === "owner.theme")?.value).toBe("dark");
+    expect(reloaded.find(setting => setting.key === "owner.theme")?.value).toBe("light");
     expect(reloaded.find(setting => setting.key === "owner.accentColor")?.value).toBe("#8b5cf6");
     expect(db.insert).toHaveBeenCalledTimes(2);
   });

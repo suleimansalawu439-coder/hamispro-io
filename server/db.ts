@@ -519,10 +519,12 @@ export async function updateAdPlacement(slotKey: string, input: Partial<typeof a
 }
 
 export const DEFAULT_SYSTEM_SETTINGS = [
+  { key: "site.faviconUrl", value: "/favicon.svg" },
+  { key: "site.ogImageUrl", value: "/og-image.svg" },
   { key: "publication.defaultTimeZone", value: "UTC" },
   { key: "analytics.retentionDays", value: "30" },
   { key: "editorial.minimumConfidence", value: "70" },
-  { key: "owner.theme", value: "light" },
+  { key: "owner.theme", value: "dark" },
   { key: "owner.accentColor", value: "#d6ff56" },
 ] as const;
 

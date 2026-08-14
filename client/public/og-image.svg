@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#121816" />
+      <stop offset="50%" stop-color="#1b2420" />
+      <stop offset="100%" stop-color="#0f1d18" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="30" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <circle cx="1050" cy="120" r="220" fill="#d6ff56" opacity="0.06" filter="url(#glow)" />
+  <circle cx="150" cy="500" r="180" fill="#ff8359" opacity="0.04" filter="url(#glow)" />
+
+  <!-- Outer Border -->
+  <rect x="30" y="30" width="1140" height="570" rx="28" fill="none" stroke="#334139" stroke-width="2" />
+
+  <!-- Brand Mark Icon -->
+  <g transform="translate(80, 80)">
+    <rect width="72" height="72" rx="20" fill="#d6ff56" />
+    <path d="M25 22 V50 M47 22 V50 M25 36 H47" stroke="#1c281e" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+
+  <!-- Brand Name -->
+  <text x="175" y="128" font-family="system-ui, -apple-system, sans-serif" font-size="36" font-weight="800" fill="#f1f4ed" letter-spacing="-0.03em">Hamispro<tspan fill="#a7b3aa" font-weight="500">.io</tspan></text>
+
+  <!-- Main Headline -->
+  <text x="80" y="290" font-family="Georgia, serif" font-size="74" font-weight="700" fill="#fbfbf8" letter-spacing="-0.04em">The useful side of AI.</text>
+
+  <!-- Subtitle -->
+  <text x="80" y="370" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="400" fill="#a7b3aa" width="900">Practical AI workflows, prompts, free tools, tutorials, and high-signal news.</text>
+
+  <!-- Pillars Badge List -->
+  <g transform="translate(80, 470)">
+    <!-- Hacks -->
+    <rect x="0" y="0" width="130" height="46" rx="23" fill="#24302a" stroke="#334139" stroke-width="1.5" />
+    <text x="65" y="29" font-family="system-ui, -apple-system, monospace" font-size="16" font-weight="600" fill="#d6ff56" text-anchor="middle">#HACKS</text>
+
+    <!-- Prompts -->
+    <rect x="150" y="0" width="150" height="46" rx="23" fill="#24302a" stroke="#334139" stroke-width="1.5" />
+    <text x="225" y="29" font-family="system-ui, -apple-system, monospace" font-size="16" font-weight="600" fill="#d6ff56" text-anchor="middle">#PROMPTS</text>
+
+    <!-- Freebies -->
+    <rect x="320" y="0" width="150" height="46" rx="23" fill="#24302a" stroke="#334139" stroke-width="1.5" />
+    <text x="395" y="29" font-family="system-ui, -apple-system, monospace" font-size="16" font-weight="600" fill="#d6ff56" text-anchor="middle">#FREEBIES</text>
+
+    <!-- Tutorials -->
+    <rect x="490" y="0" width="160" height="46" rx="23" fill="#24302a" stroke="#334139" stroke-width="1.5" />
+    <text x="570" y="29" font-family="system-ui, -apple-system, monospace" font-size="16" font-weight="600" fill="#d6ff56" text-anchor="middle">#TUTORIALS</text>
+
+    <!-- News -->
+    <rect x="670" y="0" width="120" height="46" rx="23" fill="#24302a" stroke="#334139" stroke-width="1.5" />
+    <text x="730" y="29" font-family="system-ui, -apple-system, monospace" font-size="16" font-weight="600" fill="#d6ff56" text-anchor="middle">#NEWS</text>
+  </g>
+</svg>

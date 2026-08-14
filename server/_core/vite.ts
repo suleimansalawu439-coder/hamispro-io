@@ -12,6 +12,8 @@ export type HeadMeta = {
   title: string;
   description: string;
   ogType?: "website" | "article";
+  ogImage?: string;
+  faviconUrl?: string;
   canonicalPath?: string;
   noindex?: boolean;
   notFound?: boolean;
@@ -32,7 +34,10 @@ function composeHead(head: HeadMeta) {
   const title = escapeHtml(head.title || "Hamispro.io — The useful side of AI");
   const description = escapeHtml(head.description || "Practical AI workflows, prompts, free tools, tutorials, and signals.");
   const robots = head.noindex ? "noindex, nofollow" : "index, follow";
-  return `<title>${title}</title><meta name="description" content="${description}" /><meta name="robots" content="${robots}" /><link rel="canonical" href="${escapeHtml(canonical)}" /><meta property="og:title" content="${title}" /><meta property="og:description" content="${description}" /><meta property="og:type" content="${head.ogType || "website"}" /><meta property="og:url" content="${escapeHtml(canonical)}" /><meta property="og:site_name" content="Hamispro.io" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content="${title}" /><meta name="twitter:description" content="${description}" />`;
+  const ogImage = head.ogImage ? escapeHtml(head.ogImage) : `${origin}/og-image.svg`;
+  const favicon = head.faviconUrl ? escapeHtml(head.faviconUrl) : "/favicon.svg";
+
+  return `<title>${title}</title><meta name="description" content="${description}" /><meta name="robots" content="${robots}" /><link rel="canonical" href="${escapeHtml(canonical)}" /><link rel="icon" type="image/svg+xml" href="${favicon}" /><meta property="og:title" content="${title}" /><meta property="og:description" content="${description}" /><meta property="og:type" content="${head.ogType || "website"}" /><meta property="og:url" content="${escapeHtml(canonical)}" /><meta property="og:image" content="${ogImage}" /><meta property="og:site_name" content="Hamispro.io" /><meta name="twitter:card" content="summary_large_image" /><meta name="twitter:title" content="${title}" /><meta name="twitter:description" content="${description}" /><meta name="twitter:image" content="${ogImage}" />`;
 }
 
 function composeHtml(template: string, result: { html: string; dehydratedState: unknown; head: HeadMeta }) {

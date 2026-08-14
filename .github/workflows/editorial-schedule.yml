@@ -1,0 +1,31 @@
+name: Scheduled Editorial Ingestion & Digest
+
+on:
+  schedule:
+    # Run every 4 hours (at 00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Allows manual trigger from GitHub Actions tab
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Editorial Ingestion
+        run: |
+          PROD_URL="${{ secrets.SITE_URL || 'https://hamispro.io' }}"
+          SECRET="${{ secrets.CRON_SECRET }}"
+          echo "Triggering editorial ingestion on $PROD_URL..."
+          curl -s -X POST "$PROD_URL/api/scheduled/ingestEditorial" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json"
+          echo "Ingestion trigger finished."
+
+      - name: Trigger Daily/Weekly Digest Check
+        run: |
+          PROD_URL="${{ secrets.SITE_URL || 'https://hamispro.io' }}"
+          SECRET="${{ secrets.CRON_SECRET }}"
+          echo "Triggering digest processing on $PROD_URL..."
+          curl -s -X POST "$PROD_URL/api/scheduled/sendDigest" \
+            -H "Authorization: Bearer $SECRET" \
+            -H "Content-Type: application/json"
+          echo "Digest trigger finished."

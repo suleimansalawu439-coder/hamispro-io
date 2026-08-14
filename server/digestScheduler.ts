@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { sdk } from "./_core/sdk";
 import { listDigestCandidates, listDueDigestSubscribers, markDigestSent } from "./db";
+import { isAuthorizedCronRequest } from "./editorialScheduler";
 
 const MAX_BATCH = 100;
 
@@ -11,10 +12,14 @@ export async function handleDigestScheduled(req: Request, res: Response) {
     try {
       user = await sdk.authenticateRequest(req);
     } catch {
-      return res.status(403).json({ error: "cron-only" });
+      user = null;
     }
-    if (!user.isCron || !user.taskUid) return res.status(403).json({ error: "cron-only" });
 
+    if (!isAuthorizedCronRequest(req, user)) {
+      return res.status(403).json({ error: "cron-only: invalid credentials or CRON_SECRET missing" });
+    }
+
+    const taskUid = user?.taskUid ?? "external-cron";
     const subscribers = await listDueDigestSubscribers(MAX_BATCH);
     const batches = await Promise.all(subscribers.map(async subscriber => {
       const intervalMs = subscriber.frequency === "daily" ? 24 * 60 * 60 * 1000 : 7 * 24 * 60 * 60 * 1000;
@@ -34,7 +39,7 @@ export async function handleDigestScheduled(req: Request, res: Response) {
         if (await markDigestSent(batch.email)) sent += 1;
       }
     }
-    return res.json({ ok: true, taskUid: user.taskUid, dryRun: !deliveryUrl, deliveryConfigured: Boolean(deliveryUrl), bounded: batches.length <= MAX_BATCH, processed: batches.length, sent, batches, startedAt: startedAt.toISOString() });
+    return res.json({ ok: true, taskUid, dryRun: !deliveryUrl, deliveryConfigured: Boolean(deliveryUrl), bounded: batches.length <= MAX_BATCH, processed: batches.length, sent, batches, startedAt: startedAt.toISOString() });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return res.status(500).json({ error: message, context: { url: req.originalUrl, taskUid: (req as any).user?.taskUid ?? null }, timestamp: new Date().toISOString() });
